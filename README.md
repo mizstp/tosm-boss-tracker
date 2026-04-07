@@ -20,31 +20,6 @@ A real-time, responsive, and secure Web Application designed to track and share 
 - **Backend & Database:** Firebase Authentication (Google OAuth), Firebase Cloud Firestore (NoSQL)
 - **Deployment:** GitHub Pages
 
-## Complete Setup & Security Guide
-
-If you are cloning or self-hosting this project, you need to configure Firebase appropriately to keep your data secure.
-
-### 1. Firebase Initialization
-Replace the `firebaseConfig` block inside `app.js` with your own project's Firebase details.
-
-### 2. Firestore Database Security Rules
-Because the raw Firebase API Key must be public in the frontend code, you must secure the database natively in the Firebase Console's "Rules" section for your Cloud Firestore deployment:
-
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Only logged in users can read and write documents
-    match /{document=**} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}
-```
-
-### 3. API Key Domain Restrictions
-In the **Google Cloud Console** (under API & Services -> Credentials), find the Browser API key associated with your Firebase project. Ensure you add **Website Restrictions** (HTTP Referrers) so that the API key is only accepted when connections originate from your specific domain (e.g., `*mizstp.github.io/*`).
-
 ## Administrator Quick Start
 
 1. To become a Super Admin initially, you must configure the `AdminEmails` array at the top of `app.js` with the email addresses of the owners.
