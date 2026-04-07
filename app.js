@@ -164,7 +164,7 @@ function loadBosses(mapId) {
 
 function renderBossCards() {
     if(!globalBossesData || globalBossesData.length === 0) {
-        ui.bossList.innerHTML = '<div class="empty-state">No bosses added to this map yet.</div>';
+        ui.bossList.innerHTML = '<div class="empty-state">No channels added to this map yet.</div>';
         return;
     }
 
@@ -194,15 +194,19 @@ function renderBossCards() {
 
         const card = document.createElement('div');
         card.className = 'boss-card';
+        
+        const rH = Math.floor(boss.respawnLengthMin / 60).toString().padStart(2, '0');
+        const rM = (boss.respawnLengthMin % 60).toString().padStart(2, '0');
+
         card.innerHTML = `
             <div class="boss-info">
-                <h4>${boss.name}</h4>
-                <p>Respawn: ${boss.respawnLengthMin} mins</p>
+                <h4>Channel ${boss.name}</h4>
+                <p>Respawn: ${rH}:${rM}</p>
             </div>
             <div class="timer-display ${isSpawned ? 'spawned' : ''}">${timerText}</div>
             <div class="boss-actions">
                 <button class="btn primary-btn sm-btn" onclick="killBoss('${boss.id}', ${boss.respawnLengthMin})">I Killed It</button>
-                <button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}')" style="color: var(--danger)" title="Remove Boss">X</button>
+                <button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}')" style="color: var(--danger)" title="Remove Channel">X</button>
             </div>
         `;
         ui.bossList.appendChild(card);
@@ -221,7 +225,7 @@ window.killBoss = async (bossId, respawnMins) => {
 
 window.deleteBoss = async (bossId) => {
     if(!currentMapId) return;
-    if(confirm('Are you sure you want to remove this boss?')) {
+    if(confirm('Are you sure you want to remove this channel?')) {
         await deleteDoc(doc(db, `maps/${currentMapId}/bosses`, bossId));
     }
 };
@@ -241,7 +245,7 @@ ui.saveMap.onclick = async () => {
 
 ui.deleteMapBtn.onclick = async () => {
     if(!currentMapId) return;
-    if(confirm('Are you sure you want to delete this map entirely? All bosses inside will be lost.')) {
+    if(confirm('Are you sure you want to delete this map entirely? All channels inside will be lost.')) {
         // Technically this leaves dangling bosses in Firestore logic unless deleted recursively,
         // but it removes it from UI, keeping it simple for the free tier for now.
         await deleteDoc(doc(db, "maps", currentMapId));
@@ -258,16 +262,23 @@ ui.addBossBtn.onclick = () => ui.bossModal.classList.add('show');
 ui.cancelBoss.onclick = () => { ui.bossModal.classList.remove('show'); ui.newBossName.value = ''; ui.newBossTime.value = ''; };
 ui.saveBoss.onclick = async () => {
     const name = ui.newBossName.value.trim();
-    const time = parseInt(ui.newBossTime.value);
+    const timeStr = ui.newBossTime.value.trim();
     
-    if(name && time && currentMapId) {
+    if(name && timeStr.includes(':') && currentMapId) {
+        const parts = timeStr.split(':');
+        const h = parseInt(parts[0]) || 0;
+        const m = parseInt(parts[1]) || 0;
+        const totalMin = (h * 60) + m;
+
         await addDoc(collection(db, `maps/${currentMapId}/bosses`), {
             name: name,
-            respawnLengthMin: time,
+            respawnLengthMin: totalMin,
             targetTime: null 
         });
         ui.bossModal.classList.remove('show');
         ui.newBossName.value = '';
         ui.newBossTime.value = '';
+    } else {
+        alert("Please enter a valid channel number and time in HH:MM format (like '02:30').");
     }
 };
