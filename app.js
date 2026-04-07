@@ -474,7 +474,7 @@ function renderBossCards() {
         actionsDiv.className = 'boss-actions';
         let actHtml = '';
         if (currentUserPerms.create) {
-            actHtml += `<button class="btn text-btn sm-btn" id="stage-btn-${boss.id}" style="display:none; color: #f97316; font-size: 1.2rem;" title="Set Stage" onclick="setStage('${boss.id}', '${boss.name}')">📊</button>`;
+            actHtml += `<button class="btn text-btn sm-btn" id="stage-btn-${boss.id}" style="display:none;" title="Set Stage" onclick="setStage('${boss.id}', '${boss.name}')"><img src="pic/Stage.png" style="width:22px; height:22px; object-fit:contain; vertical-align:middle;"></button>`;
             actHtml += `<button class="btn text-btn sm-btn" style="color: var(--primary); font-size: 1.2rem; margin-right: 0.5rem;" title="Reset Timer" onclick="editBoss('${boss.id}', '${boss.name}')">⏱️</button>`;
         }
         if (currentUserPerms.delete_all || currentUserPerms.delete_channel) {
