@@ -5,13 +5,13 @@ import { qrData } from "./bdata.js";
 
 // Your Firebase configuration from the screenshot
 const firebaseConfig = {
-  apiKey: "AIzaSyBtOgABQlrCH_9wfTQ7g9Bxhnn336vsKQI",
-  authDomain: "tosm-3f264.firebaseapp.com",
-  projectId: "tosm-3f264",
-  storageBucket: "tosm-3f264.firebasestorage.app",
-  messagingSenderId: "602705659676",
-  appId: "1:602705659676:web:54705408856ea7e25edcd9",
-  measurementId: "G-PYVW8G02YE"
+    apiKey: "AIzaSyBtOgABQlrCH_9wfTQ7g9Bxhnn336vsKQI",
+    authDomain: "tosm-3f264.firebaseapp.com",
+    projectId: "tosm-3f264",
+    storageBucket: "tosm-3f264.firebasestorage.app",
+    messagingSenderId: "602705659676",
+    appId: "1:602705659676:web:54705408856ea7e25edcd9",
+    measurementId: "G-PYVW8G02YE"
 };
 
 // Initialize Firebase
@@ -23,10 +23,10 @@ const AdminEmails = ["mizstpz@gmail.com", "flosslnw4@gmail.com"];
 
 const EP_DATA = {
     13: ["Alemeth Forest", "Barha Forest", "Kalejimas Lounge", "Investigation Room"],
-    12: ["Coastal Fortress", "Altar Road", "Dingofasil District", "Fortress Battlegrounds", "Storage Quarter"],
+    12: ["Coastal Fortress", "Dingofasil District", "Storage Quarter", "Fortress Battlegrounds"],
     11: ["Laukyme Swamp", "Tyla Monastery", "Bellai Rainforest", "Zeraha", "Seir Rainforest"],
-    10: ["Penitence Route", "Main Building", "Biltis Forest", "Grand Corridor", "Sanctuary"],
-    9: ["Goddess Ancient Garden", "Fedimian", "Fedimian Suburbs", "Lamstis Gorge", "Mage Tower 1F", "Mage Tower 2F", "Mage Tower 3F"],
+    10: ["Penitence Route", "Main Building", "Grand Corridor", "Sanctuary"],
+    9: ["Goddess Ancient Garden", "Fedimian", "Fedimian Suburbs", "Mage Tower 1F", "Mage Tower 2F", "Mage Tower 3F"],
     8: ["Baron Allerno", "Aqueduct Bridge Area", "Demon Prison District 1", "Demon Prison District 3", "Demon Prison District 4", "Demon Prison District 5", "Gindari Gorge"],
     7: ["Rukas Plateau", "King's Plateau", "Zachariel Crossroads", "Mocia Forest", "Royal Mausoleum 1F", "Royal Mausoleum 2F", "Royal Mausoleum 3F"],
     6: ["Dina Bee Farm", "Vilna Forest", "Uskis Arable Land", "Spring Light Woods", "Gate Route", "Sirdgela Forest", "Kvailas Forest", "Origin Forest"],
@@ -57,17 +57,19 @@ const forms = {
 const ui = {
     epTabs: document.getElementById('ep-tabs'),
     mapTabs: document.getElementById('map-tabs'),
-    
+
     currentMapTitle: document.getElementById('current-map-title'),
     addBossBtn: document.getElementById('add-boss-btn'),
     bossList: document.getElementById('boss-list'),
-    
+
+    notiBtn: document.getElementById('noti-btn'),
+
     bossModal: document.getElementById('boss-modal'),
     newBossName: document.getElementById('new-boss-name'),
     newBossTime: document.getElementById('new-boss-time'),
     cancelBoss: document.getElementById('cancel-boss-btn'),
     saveBoss: document.getElementById('save-boss-btn'),
-    
+
     donateBtn: document.getElementById('donate-btn'),
     donateModal: document.getElementById('donate-modal'),
     closeDonateBtn: document.getElementById('close-donate-btn'),
@@ -75,17 +77,17 @@ const ui = {
     adminBtn: document.getElementById('admin-btn'),
     adminModal: document.getElementById('admin-modal'),
     closeAdminBtn: document.getElementById('close-admin-btn'),
-    
+
     tabLogs: document.getElementById('tab-logs'),
     tabMembers: document.getElementById('tab-members'),
     tabRoles: document.getElementById('tab-roles'),
     adminLogsContent: document.getElementById('admin-logs-content'),
     adminMembersContent: document.getElementById('admin-members-content'),
     adminRolesContent: document.getElementById('admin-roles-content'),
-    
+
     adminLogsTbody: document.getElementById('admin-logs-tbody'),
     adminMembersTbody: document.getElementById('admin-members-tbody'),
-    
+
     newRoleName: document.getElementById('new-role-name'),
     permAdmin: document.getElementById('perm-admin'),
     permCreate: document.getElementById('perm-create'),
@@ -123,7 +125,7 @@ let currentUserPerms = { admin: false, create: false, delete_channel: false, del
 
 // ----------------- AUDIT LOGS -----------------
 async function logActivity(action, details) {
-    if(!auth.currentUser) return;
+    if (!auth.currentUser) return;
     try {
         await addDoc(collection(db, "auditLogs"), {
             action: action,
@@ -131,7 +133,7 @@ async function logActivity(action, details) {
             userEmail: auth.currentUser.email,
             timestamp: serverTimestamp()
         });
-    } catch(e) { console.error("Failed to log activity:", e); }
+    } catch (e) { console.error("Failed to log activity:", e); }
 }
 
 // ----------------- ROUTING / VIEWS -----------------
@@ -144,7 +146,7 @@ function switchView(viewName) {
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         const uEmail = user.email.toLowerCase();
-        
+
         let currentRoleId = null;
         let isFirstLogin = false;
         const memRef = doc(db, "members", uEmail);
@@ -177,10 +179,10 @@ onAuthStateChanged(auth, async (user) => {
         };
         // If it's their very first login and we found the default role, set it.
         // Otherwise, leave their roleId exactly as it is (so admins can strip roles completely).
-        if(isFirstLogin && currentRoleId) {
+        if (isFirstLogin && currentRoleId) {
             memberData.roleId = currentRoleId;
         }
-        
+
         await setDoc(memRef, memberData, { merge: true });
 
         // 2. Resolve Permissions
@@ -192,10 +194,10 @@ onAuthStateChanged(auth, async (user) => {
                 const roleDoc = await getDoc(doc(db, "roles", currentRoleId));
                 if (roleDoc.exists()) {
                     const rp = roleDoc.data();
-                    if(rp.admin) perms.admin = true;
-                    if(rp.create) perms.create = true;
-                    if(rp.delChannel) perms.delete_channel = true;
-                    if(rp.delAll) perms.delete_all = true;
+                    if (rp.admin) perms.admin = true;
+                    if (rp.create) perms.create = true;
+                    if (rp.delChannel) perms.delete_channel = true;
+                    if (rp.delAll) perms.delete_all = true;
                 }
             }
         }
@@ -210,9 +212,15 @@ onAuthStateChanged(auth, async (user) => {
     } else {
         switchView('auth');
         // Cleanup listeners when logged out
-        if(mapsUnsubscribe) mapsUnsubscribe();
-        if(bossesUnsubscribe) bossesUnsubscribe();
-        if(updateInterval) clearInterval(updateInterval);
+        if (mapsUnsubscribe) mapsUnsubscribe();
+        if (bossesUnsubscribe) bossesUnsubscribe();
+        if (updateInterval) clearInterval(updateInterval);
+
+        // Cleanup all background listeners
+        Object.values(globalMapListeners).forEach(unsub => unsub());
+        globalMapListeners = {};
+        globalAllBosses = [];
+        notifiedBosses = {};
     }
 });
 
@@ -236,15 +244,112 @@ forms.logoutBtn.addEventListener('click', () => {
     signOut(auth);
 });
 
+// ----------------- NOTIFICATIONS -----------------
+if (ui.notiBtn) {
+    if (Notification.permission === 'granted') {
+        ui.notiBtn.style.color = '#10b981';
+        ui.notiBtn.style.borderColor = '#10b981';
+        ui.notiBtn.textContent = '🔔 Notis On';
+    }
+    ui.notiBtn.onclick = () => {
+        if (Notification.permission === 'granted') {
+            alert('Notifications are already enabled!');
+            return;
+        }
+        Notification.requestPermission().then(perm => {
+            if (perm === 'granted') {
+                ui.notiBtn.style.color = '#10b981';
+                ui.notiBtn.style.borderColor = '#10b981';
+                ui.notiBtn.textContent = '🔔 Notis On';
+                new Notification('TOSM Tracker', { body: 'Notifications enabled successfully!' });
+            } else {
+                alert('Notification permission was denied.');
+            }
+        });
+    };
+}
+let notifiedBosses = {};
+
 // ----------------- MAPS LOGIC -----------------
+let globalMapListeners = {};
+let globalAllBosses = []; // Flat array of all bosses across the game
+
+// Helper to check if a map or EP is "On Fire" (< 10 mins remaining)
+function getFireIconHTML(epKey = null, mapName = null) {
+    const now = Date.now();
+    const TEN_MINS = 10 * 60 * 1000;
+
+    let isFire = false;
+
+    if (mapName) {
+        // Check specific map
+        isFire = globalAllBosses.some(b => b.mapId === mapName && b.targetTime && (b.targetTime - now) > 0 && (b.targetTime - now) <= TEN_MINS);
+    } else if (epKey) {
+        // Check all maps in EP
+        const epMaps = EP_DATA[epKey] || [];
+        isFire = globalAllBosses.some(b => epMaps.includes(b.mapId) && b.targetTime && (b.targetTime - now) > 0 && (b.targetTime - now) <= TEN_MINS);
+    }
+
+    return isFire ? ' <span style="color: #ef4444; text-shadow: 0 0 5px rgba(239, 68, 68, 0.5);">🔥</span>' : '';
+}
+
+// Global listener to track all channels for fire icons
+function startGlobalListeners() {
+    if (Object.keys(globalMapListeners).length > 0) return; // Already started
+
+    Object.keys(EP_DATA).forEach(ep => {
+        EP_DATA[ep].forEach(mapId => {
+            const q = query(collection(db, `maps/${mapId}/bosses`));
+            globalMapListeners[mapId] = onSnapshot(q, (snapshot) => {
+                // Remove old bosses for this map
+                globalAllBosses = globalAllBosses.filter(b => b.mapId !== mapId);
+
+                snapshot.forEach(docSnap => {
+                    globalAllBosses.push({ id: docSnap.id, mapId: mapId, ...docSnap.data() });
+                });
+
+                // Triggers an update to the Tabs HTML
+                updateTabIcons();
+            });
+        });
+    });
+}
+
+function updateTabIcons() {
+    if (!auth.currentUser || !currentEP) return;
+
+    // Update EP tabs
+    Array.from(ui.epTabs.children).forEach(t => {
+        const epNum = t.getAttribute('data-ep');
+        if (!epNum) return;
+        const text = `EP ${epNum}`;
+        const fire = getFireIconHTML(epNum, null);
+        if (t.innerHTML !== text + fire) {
+            t.innerHTML = text + fire;
+        }
+    });
+
+    // Update Map tabs
+    Array.from(ui.mapTabs.children).forEach(t => {
+        const mName = t.getAttribute('data-map');
+        if (!mName) return;
+        const fire = getFireIconHTML(null, mName);
+        if (t.innerHTML !== mName + fire) {
+            t.innerHTML = mName + fire;
+        }
+    });
+}
+
 function loadMaps() {
+    startGlobalListeners();
     ui.epTabs.innerHTML = '';
-    const eps = Object.keys(EP_DATA).sort((a,b) => parseInt(b) - parseInt(a)); // Descending EP
-    
+    const eps = Object.keys(EP_DATA).sort((a, b) => parseInt(b) - parseInt(a)); // Descending EP
+
     eps.forEach(ep => {
         const btn = document.createElement('div');
         btn.className = `tab ${currentEP === ep ? 'active-tab' : ''}`;
-        btn.textContent = `EP ${ep}`;
+        btn.setAttribute('data-ep', ep);
+        btn.innerHTML = `EP ${ep}` + getFireIconHTML(ep, null);
         btn.onclick = () => selectEP(ep);
         ui.epTabs.appendChild(btn);
     });
@@ -256,22 +361,25 @@ function selectEP(epKey) {
     currentEP = epKey;
     // Update EP tabs visually
     Array.from(ui.epTabs.children).forEach(t => {
-        if(t.textContent === `EP ${epKey}`) t.classList.add('active-tab');
+        if (t.textContent === `EP ${epKey}`) t.classList.add('active-tab');
         else t.classList.remove('active-tab');
     });
 
     // Render maps for this EP
     ui.mapTabs.innerHTML = '';
     const maps = EP_DATA[epKey];
-    if(maps && maps.length > 0) {
-        maps.forEach(mapName => {
+    if (maps && maps.length > 0) {
+        // Sort maps descending by reversing the array so later maps show up first
+        const sortedMaps = maps.slice().reverse();
+        sortedMaps.forEach(mapName => {
             const btn = document.createElement('div');
             btn.className = `tab`;
-            btn.textContent = mapName;
+            btn.setAttribute('data-map', mapName);
+            btn.innerHTML = mapName + getFireIconHTML(null, mapName);
             btn.onclick = () => selectMap(mapName);
             ui.mapTabs.appendChild(btn);
         });
-        selectMap(maps[0]);
+        selectMap(sortedMaps[0]);
     } else {
         ui.mapTabs.innerHTML = '<div class="empty-state" style="padding:0; margin:0; font-size: 0.85rem;">No maps here yet</div>';
         currentMapId = null;
@@ -285,13 +393,13 @@ function selectMap(name) {
     // We use the full Map Name directly as the currentMapId!
     currentMapId = name;
     ui.currentMapTitle.textContent = name;
-    
+
     // UI perms apply
     ui.addBossBtn.style.display = currentUserPerms.create ? 'block' : 'none';
-    
+
     // update tab UI
     Array.from(ui.mapTabs.children).forEach(t => {
-        if(t.textContent === name) t.classList.add('active-tab');
+        if (t.getAttribute('data-map') === name) t.classList.add('active-tab');
         else t.classList.remove('active-tab');
     });
     loadBosses(name);
@@ -299,8 +407,8 @@ function selectMap(name) {
 
 // ----------------- BOSS LOGIC -----------------
 function loadBosses(mapId) {
-    if(bossesUnsubscribe) bossesUnsubscribe();
-    if(updateInterval) clearInterval(updateInterval);
+    if (bossesUnsubscribe) bossesUnsubscribe();
+    if (updateInterval) clearInterval(updateInterval);
 
     const q = query(collection(db, `maps/${mapId}/bosses`));
     bossesUnsubscribe = onSnapshot(q, (snapshot) => {
@@ -310,13 +418,13 @@ function loadBosses(mapId) {
         });
         renderBossCards();
         // start UI timer update loop
-        if(updateInterval) clearInterval(updateInterval);
-        updateInterval = setInterval(updateTimers, 1000); 
+        if (updateInterval) clearInterval(updateInterval);
+        updateInterval = setInterval(updateTimers, 1000);
     });
 }
 
 function renderBossCards() {
-    if(!globalBossesData || globalBossesData.length === 0) {
+    if (!globalBossesData || globalBossesData.length === 0) {
         ui.bossList.innerHTML = '<div class="empty-state">No channels added to this map yet.</div>';
         return;
     }
@@ -328,7 +436,7 @@ function renderBossCards() {
     globalBossesData.forEach(boss => {
         if (!boss.targetTime) {
             let sH = 0, sM = 0;
-            if(boss.hhmmStr) {
+            if (boss.hhmmStr) {
                 const p = boss.hhmmStr.split(':');
                 sH = parseInt(p[0]) || 0;
                 sM = parseInt(p[1]) || 0;
@@ -348,8 +456,8 @@ function renderBossCards() {
     globalBossesData.sort((a, b) => {
         const aSpawned = a._sortTime <= nowSort;
         const bSpawned = b._sortTime <= nowSort;
-        if(aSpawned && !bSpawned) return -1;
-        if(!aSpawned && bSpawned) return 1;
+        if (aSpawned && !bSpawned) return -1;
+        if (!aSpawned && bSpawned) return 1;
         return a._sortTime - b._sortTime;
     });
 
@@ -357,9 +465,9 @@ function renderBossCards() {
         const card = document.createElement('div');
         card.className = 'boss-card';
         card.id = `boss-card-${boss.id}`;
-        
-        let sH="00", sM="00";
-        if(boss.hhmmStr) {
+
+        let sH = "00", sM = "00";
+        if (boss.hhmmStr) {
             const p = boss.hhmmStr.split(':');
             sH = p[0].padStart(2, '0');
             sM = p[1].padStart(2, '0');
@@ -375,19 +483,19 @@ function renderBossCards() {
                 <p class="spawn-time-text" style="color: var(--primary); font-weight: bold; margin-top: 4px; font-variant-numeric: tabular-nums; font-size: 1.1rem;"></p>
             </div>
         `;
-        
+
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'boss-actions';
         let actHtml = '';
         if (currentUserPerms.create) {
-             actHtml += `<button class="btn text-btn sm-btn" style="color: var(--primary); font-size: 1.2rem; margin-right: 0.5rem;" title="Reset Timer" onclick="editBoss('${boss.id}', '${boss.name}')">⏱️</button>`;
+            actHtml += `<button class="btn text-btn sm-btn" style="color: var(--primary); font-size: 1.2rem; margin-right: 0.5rem;" title="Reset Timer" onclick="editBoss('${boss.id}', '${boss.name}')">⏱️</button>`;
         }
         if (currentUserPerms.delete_all || currentUserPerms.delete_channel) {
-             actHtml += `<button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}', '${boss.name}')" style="color: var(--danger); font-size: 1.2rem; font-weight: bold;" title="Remove Channel">X</button>`;
+            actHtml += `<button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}', '${boss.name}')" style="color: var(--danger); font-size: 1.2rem; font-weight: bold;" title="Remove Channel">X</button>`;
         }
         if (actHtml) {
-             actionsDiv.innerHTML = actHtml;
-             card.appendChild(actionsDiv);
+            actionsDiv.innerHTML = actHtml;
+            card.appendChild(actionsDiv);
         }
 
         ui.bossList.appendChild(card);
@@ -400,13 +508,13 @@ function updateTimers() {
     const now = Date.now();
     globalBossesData.forEach(boss => {
         const card = document.getElementById(`boss-card-${boss.id}`);
-        if(!card) return;
+        if (!card) return;
 
         const ruleText = card.querySelector('.rule-text');
         const spawnText = card.querySelector('.spawn-time-text');
-        
-        let sH="00", sM="00";
-        if(boss.hhmmStr) {
+
+        let sH = "00", sM = "00";
+        if (boss.hhmmStr) {
             const p = boss.hhmmStr.split(':');
             sH = p[0].padStart(2, '0');
             sM = p[1].padStart(2, '0');
@@ -420,7 +528,7 @@ function updateTimers() {
         let rText = `Respawn time: ${sH}:${sM}`;
 
         let targetEpoch = boss.targetTime;
-        if(!targetEpoch) {
+        if (!targetEpoch) {
             const d = new Date();
             d.setHours(parseInt(sH));
             d.setMinutes(parseInt(sM));
@@ -431,7 +539,7 @@ function updateTimers() {
 
         const TWO_HOURS = 2 * 60 * 60 * 1000;
         if (now - targetEpoch > TWO_HOURS) {
-            if(!boss._deleting && currentMapId) {
+            if (!boss._deleting && currentMapId) {
                 boss._deleting = true;
                 deleteDoc(doc(db, `maps/${currentMapId}/bosses`, boss.id)).catch(console.error);
             }
@@ -439,6 +547,18 @@ function updateTimers() {
         }
 
         const remainingMeta = targetEpoch - now;
+
+        // Notify if it just spawned (within the last 2 minutes, and not already notified for this exact targetTime)
+        if (remainingMeta <= 0 && remainingMeta > -120000) {
+            if (notifiedBosses[boss.id] !== targetEpoch && Notification.permission === 'granted') {
+                new Notification('TOSM Boss Spawned!', {
+                    body: `Channel ${boss.name} in ${currentMapId} has entered Stage Start!!!`,
+                    icon: 'favicon.ico'
+                });
+                notifiedBosses[boss.id] = targetEpoch;
+            }
+        }
+
         if (remainingMeta <= 0) {
             isSpawned = true;
             const elapsedSeconds = Math.floor(Math.abs(remainingMeta) / 1000);
@@ -455,28 +575,31 @@ function updateTimers() {
         }
 
         if (ruleText.textContent !== rText) {
-             ruleText.textContent = rText;
+            ruleText.textContent = rText;
         }
         if (spawnText.innerHTML !== sText) {
-             spawnText.innerHTML = sText;
+            spawnText.innerHTML = sText;
         }
     });
+
+    // Also trigger update for Tabs so Fire Icons appear dynamically
+    updateTabIcons();
 }
 
 window.deleteBoss = async (bossId, bossName) => {
-    if(!currentUserPerms.delete_channel && !currentUserPerms.delete_all) {
+    if (!currentUserPerms.delete_channel && !currentUserPerms.delete_all) {
         alert("You do not have permission to delete channels.");
         return;
     }
-    if(!currentMapId) return;
-    if(confirm('Are you sure you want to remove this channel?')) {
+    if (!currentMapId) return;
+    if (confirm('Are you sure you want to remove this channel?')) {
         await deleteDoc(doc(db, `maps/${currentMapId}/bosses`, bossId));
         logActivity("Remove Channel", `Removed channel [${bossName}] from map [${ui.currentMapTitle.textContent}]`);
     }
 };
 
 window.editBoss = (bossId, channelName) => {
-    if(!currentUserPerms.create) return;
+    if (!currentUserPerms.create) return;
     editingBossId = bossId;
     ui.bossModal.querySelector('h3').textContent = `Reset Respawn: Ch. ${channelName}`;
     ui.newBossName.value = channelName;
@@ -498,7 +621,7 @@ ui.addBossBtn.onclick = () => {
 };
 
 // Donate Modal
-if(ui.donateBtn) {
+if (ui.donateBtn) {
     ui.donateBtn.onclick = () => {
         ui.donateModal.classList.add('show');
         const img = document.querySelector('.donate-qr');
@@ -515,29 +638,29 @@ ui.addBossBtn.onclick = () => ui.bossModal.classList.add('show');
 ui.cancelBoss.onclick = () => { ui.bossModal.classList.remove('show'); ui.newBossName.value = ''; ui.newBossTime.value = ''; };
 
 // Auto-format time input
-ui.newBossTime.addEventListener('input', function(e) {
+ui.newBossTime.addEventListener('input', function (e) {
     if (e.inputType === 'deleteContentBackward') return;
     let val = this.value.replace(/[^\d]/g, '');
-    
+
     if (ui.typeDuration.checked && val.length === 1) {
         // For Countdown, auto-prepend 0 for hours since max game respawn is 6 hrs
         val = '0' + val + ':';
     } else if (val.length >= 2) {
         val = val.substring(0, 2) + (val.length > 2 ? ':' + val.substring(2, 4) : ':');
     }
-    
+
     this.value = val;
 });
 
 ui.saveBoss.onclick = async () => {
-    if(!currentUserPerms.create) {
+    if (!currentUserPerms.create) {
         alert("You do not have permission to create channels.");
         return;
     }
     const name = ui.newBossName.value.trim();
     const timeStr = ui.newBossTime.value.trim();
-    
-    if(name && timeStr.includes(':') && currentMapId) {
+
+    if (name && timeStr.includes(':') && currentMapId) {
         const parts = timeStr.split(':');
         const h = parseInt(parts[0]) || 0;
         const m = parseInt(parts[1]) || 0;
@@ -552,7 +675,7 @@ ui.saveBoss.onclick = async () => {
             targetEpoch = Date.now() + ((h * 60 * 60 * 1000) + (m * 60 * 1000));
             // Convert to absolute string for legacy fallback
             const resD = new Date(targetEpoch);
-            saveHhMmStr = resD.getHours().toString().padStart(2,'0') + ":" + resD.getMinutes().toString().padStart(2,'0');
+            saveHhMmStr = resD.getHours().toString().padStart(2, '0') + ":" + resD.getMinutes().toString().padStart(2, '0');
 
             if (targetEpoch > Date.now() + EIGHT_HOURS) {
                 alert("Cannot track a countdown duration longer than 8 hours!");
@@ -577,7 +700,7 @@ ui.saveBoss.onclick = async () => {
             await updateDoc(doc(db, `maps/${currentMapId}/bosses`, editingBossId), {
                 targetTime: targetEpoch,
                 hhmmStr: saveHhMmStr,
-                respawnLengthMin: totalMin 
+                respawnLengthMin: totalMin
             });
             logActivity("Reset Timer", `Map [${ui.currentMapTitle.textContent}] Channel [${name}] | New Time: ${saveHhMmStr}`);
         } else {
@@ -585,7 +708,7 @@ ui.saveBoss.onclick = async () => {
                 name: name,
                 targetTime: targetEpoch,
                 hhmmStr: saveHhMmStr,
-                respawnLengthMin: totalMin 
+                respawnLengthMin: totalMin
             });
             logActivity("Add Channel", `Map [${ui.currentMapTitle.textContent}] Channel [${name}] | Time Set: ${saveHhMmStr}`);
         }
@@ -613,10 +736,10 @@ function switchAdminTab(showId) {
     ui.tabLogs.classList.remove('active-tab');
     ui.tabMembers.classList.remove('active-tab');
     ui.tabRoles.classList.remove('active-tab');
-    
-    if(showId === 'logs') { ui.adminLogsContent.style.display = 'block'; ui.tabLogs.classList.add('active-tab'); }
-    if(showId === 'members') { ui.adminMembersContent.style.display = 'block'; ui.tabMembers.classList.add('active-tab'); }
-    if(showId === 'roles') { ui.adminRolesContent.style.display = 'block'; ui.tabRoles.classList.add('active-tab'); }
+
+    if (showId === 'logs') { ui.adminLogsContent.style.display = 'block'; ui.tabLogs.classList.add('active-tab'); }
+    if (showId === 'members') { ui.adminMembersContent.style.display = 'block'; ui.tabMembers.classList.add('active-tab'); }
+    if (showId === 'roles') { ui.adminRolesContent.style.display = 'block'; ui.tabRoles.classList.add('active-tab'); }
 }
 
 if (ui.adminBtn) {
@@ -640,8 +763,8 @@ if (ui.adminBtn) {
     // Save Role Button
     ui.saveRoleBtn.onclick = async () => {
         const rName = ui.newRoleName.value.trim();
-        if(!rName) { alert("Need Role Name"); return; }
-        
+        if (!rName) { alert("Need Role Name"); return; }
+
         await setDoc(doc(collection(db, "roles")), {
             name: rName,
             admin: ui.permAdmin.checked,
@@ -663,31 +786,31 @@ function loadAdminRoles() {
         ui.rolesList.innerHTML = '';
         globalRolesList = [];
         snapshot.forEach(docSnap => {
-             const r = {id: docSnap.id, ...docSnap.data()};
-             globalRolesList.push(r);
-             
-             let permsText = [];
-             if(r.admin) permsText.push("Admin Dashboard");
-             if(r.create) permsText.push("Create");
-             if(r.delChannel) permsText.push("Delete Channel");
-             if(r.delAll) permsText.push("Delete Everything");
-             
-             const li = document.createElement('li');
-             li.style.marginBottom = "0.6rem";
-             li.style.padding = "0.5rem";
-             li.style.background = "rgba(255,255,255,0.05)";
-             li.style.borderRadius = "4px";
-             li.style.display = "flex";
-             li.style.justifyContent = "space-between";
-             li.style.alignItems = "center";
-             li.innerHTML = `
+            const r = { id: docSnap.id, ...docSnap.data() };
+            globalRolesList.push(r);
+
+            let permsText = [];
+            if (r.admin) permsText.push("Admin Dashboard");
+            if (r.create) permsText.push("Create");
+            if (r.delChannel) permsText.push("Delete Channel");
+            if (r.delAll) permsText.push("Delete Everything");
+
+            const li = document.createElement('li');
+            li.style.marginBottom = "0.6rem";
+            li.style.padding = "0.5rem";
+            li.style.background = "rgba(255,255,255,0.05)";
+            li.style.borderRadius = "4px";
+            li.style.display = "flex";
+            li.style.justifyContent = "space-between";
+            li.style.alignItems = "center";
+            li.innerHTML = `
                 <div>
                    <strong style="color:var(--primary);">${r.name}</strong><br>
                    <span style="color:var(--text-muted); font-size: 0.75rem;">${permsText.join(', ') || 'No Permissions'}</span>
                 </div>
                 <button class="btn text-btn sm-btn" style="color: var(--danger); padding:0;" onclick="deleteRole('${r.id}')">Delete</button>
              `;
-             ui.rolesList.appendChild(li);
+            ui.rolesList.appendChild(li);
         });
         loadAdminMembers(); // Once roles are loaded, render Members (so dropdown selects have roles)
     });
@@ -699,62 +822,62 @@ function loadAdminLogs() {
     adminLogsUnsubscribe = onSnapshot(q, (snapshot) => {
         ui.adminLogsTbody.innerHTML = '';
         if (snapshot.empty) {
-             ui.adminLogsTbody.innerHTML = "<tr><td colspan='3' style='padding: 0.8rem;'>No recent logs.</td></tr>";
-             return;
+            ui.adminLogsTbody.innerHTML = "<tr><td colspan='3' style='padding: 0.8rem;'>No recent logs.</td></tr>";
+            return;
         }
         snapshot.forEach(docSnap => {
-             const d = docSnap.data();
-             const timeStr = d.timestamp ? new Date(d.timestamp.toMillis()).toLocaleString() : "Now";
-             const tr = document.createElement('tr');
-             tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
-             tr.innerHTML = `
+            const d = docSnap.data();
+            const timeStr = d.timestamp ? new Date(d.timestamp.toMillis()).toLocaleString() : "Now";
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
+            tr.innerHTML = `
                 <td style="padding: 0.5rem; color:var(--text-main);">${d.userEmail || 'Unknown'}</td>
                 <td style="padding: 0.5rem; color:var(--text-muted);">${d.action} <span style="font-size:0.75rem">(${d.details})</span></td>
                 <td style="padding: 0.5rem; color:var(--text-muted); font-size:0.75rem;">${timeStr}</td>
              `;
-             ui.adminLogsTbody.appendChild(tr);
+            ui.adminLogsTbody.appendChild(tr);
         });
     });
 }
 
 function loadAdminMembers() {
     const q = query(collection(db, "members"));
-    if(adminMembersUnsubscribe) adminMembersUnsubscribe();
+    if (adminMembersUnsubscribe) adminMembersUnsubscribe();
     adminMembersUnsubscribe = onSnapshot(q, (snapshot) => {
         ui.adminMembersTbody.innerHTML = '';
         if (snapshot.empty) {
-             ui.adminMembersTbody.innerHTML = "<tr><td colspan='2' style='padding: 0.8rem;'>No members found.</td></tr>";
-             return;
+            ui.adminMembersTbody.innerHTML = "<tr><td colspan='2' style='padding: 0.8rem;'>No members found.</td></tr>";
+            return;
         }
         snapshot.forEach(docSnap => {
-             const d = docSnap.data();
-             const email = docSnap.id;
-             let roleOptionsHTML = `<option value="">-- No Permissions --</option>`;
-             globalRolesList.forEach(r => {
-                 const sel = (d.roleId === r.id) ? "selected" : "";
-                 roleOptionsHTML += `<option value="${r.id}" ${sel}>${r.name}</option>`;
-             });
+            const d = docSnap.data();
+            const email = docSnap.id;
+            let roleOptionsHTML = `<option value="">-- No Permissions --</option>`;
+            globalRolesList.forEach(r => {
+                const sel = (d.roleId === r.id) ? "selected" : "";
+                roleOptionsHTML += `<option value="${r.id}" ${sel}>${r.name}</option>`;
+            });
 
-             const tr = document.createElement('tr');
-             tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
-             
-             // Superadmin badge override
-             let selectBlock = `<select onchange="updateMemberRole('${email}', this.value)" style="background:rgba(15,23,42,0.8); color:white; padding:0.4rem; border-radius:4px; border:1px solid var(--card-border); max-width: 150px;">${roleOptionsHTML}</select>`;
-             if (AdminEmails.includes(email)) {
-                 selectBlock = `<span style="color:#f59e0b; font-weight:bold;">Super Admin (Locked)</span>`;
-             }
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
 
-             tr.innerHTML = `
+            // Superadmin badge override
+            let selectBlock = `<select onchange="updateMemberRole('${email}', this.value)" style="background:rgba(15,23,42,0.8); color:white; padding:0.4rem; border-radius:4px; border:1px solid var(--card-border); max-width: 150px;">${roleOptionsHTML}</select>`;
+            if (AdminEmails.includes(email)) {
+                selectBlock = `<span style="color:#f59e0b; font-weight:bold;">Super Admin (Locked)</span>`;
+            }
+
+            tr.innerHTML = `
                 <td style="padding: 0.8rem; color:var(--text-main); word-break: break-all;">${email}</td>
                 <td style="padding: 0.8rem;">${selectBlock}</td>
              `;
-             ui.adminMembersTbody.appendChild(tr);
+            ui.adminMembersTbody.appendChild(tr);
         });
     });
 }
 
 window.deleteRole = async (roleId) => {
-    if(confirm("Delete this role entirely? Members assigned to this role will lose their special permissions.")) {
+    if (confirm("Delete this role entirely? Members assigned to this role will lose their special permissions.")) {
         await deleteDoc(doc(db, "roles", roleId));
     }
 };
