@@ -189,10 +189,9 @@ function renderBossCards() {
         card.innerHTML = `
             <div class="boss-info">
                 <h4>Channel ${boss.name}</h4>
-                <p>Respawn rule: ${rH}h ${rM}m</p>
-                <p class="spawn-time-text" style="color: var(--primary); font-weight: bold; margin-top: 4px;"></p>
+                <p class="rule-text" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.2rem;">Respawn time: ${rH}:${rM}</p>
+                <p class="spawn-time-text" style="color: var(--primary); font-weight: bold; margin-top: 4px; font-variant-numeric: tabular-nums; font-size: 1.1rem;"></p>
             </div>
-            <div class="timer-display"></div>
             <div class="boss-actions">
                 <button class="btn primary-btn sm-btn" onclick="killBoss('${boss.id}', ${boss.respawnLengthMin})" style="white-space: nowrap; padding: 0.6rem 1.4rem;">Die</button>
                 <button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}')" style="color: var(--danger)" title="Remove Channel">X</button>
@@ -210,44 +209,47 @@ function updateTimers() {
         const card = document.getElementById(`boss-card-${boss.id}`);
         if(!card) return;
 
-        const timerDisplay = card.querySelector('.timer-display');
+        const ruleText = card.querySelector('.rule-text');
         const spawnText = card.querySelector('.spawn-time-text');
+        
+        const rH = Math.floor(boss.respawnLengthMin / 60).toString().padStart(2, '0');
+        const rM = (boss.respawnLengthMin % 60).toString().padStart(2, '0');
 
-        let timerText = "00:00:00";
         let isSpawned = false;
         let sText = "Waiting for kill...";
+        let rText = `Respawn time: ${rH}:${rM}`;
 
         if (boss.targetTime) {
             const spawnDate = new Date(boss.targetTime);
             const sH = spawnDate.getHours().toString().padStart(2, '0');
             const sM = spawnDate.getMinutes().toString().padStart(2, '0');
-            sText = `Spawns at: ${sH}:${sM}`;
+            rText = `Respawn time: ${sH}:${sM}`;
 
             const remainingMeta = boss.targetTime - now;
             if (remainingMeta <= 0) {
                 isSpawned = true;
-                timerText = "SPAWNED!";
                 sText = "Spawned!";
             } else {
                 const totalSeconds = Math.floor(remainingMeta / 1000);
                 const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
                 const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
                 const s = (totalSeconds % 60).toString().padStart(2, '0');
-                timerText = `${h}:${m}:${s}`;
+                sText = `Waiting in... ${h}:${m}:${s}`;
             }
-        } else {
-             timerText = "Waiting...";
         }
 
-        if(timerDisplay.textContent !== timerText) {
-             timerDisplay.textContent = timerText;
+        if (ruleText.textContent !== rText) {
+             ruleText.textContent = rText;
         }
-        if(spawnText.textContent !== sText) {
+        if (spawnText.textContent !== sText) {
              spawnText.textContent = sText;
         }
         
-        if(isSpawned) timerDisplay.classList.add('spawned');
-        else timerDisplay.classList.remove('spawned');
+        if (isSpawned) {
+             spawnText.style.color = '#4ade80';
+        } else {
+             spawnText.style.color = 'var(--primary)';
+        }
     });
 }
 
