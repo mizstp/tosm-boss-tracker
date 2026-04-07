@@ -264,6 +264,15 @@ function updateTimers() {
             targetEpoch = d.getTime();
         }
 
+        const TWO_HOURS = 2 * 60 * 60 * 1000;
+        if (now - targetEpoch > TWO_HOURS) {
+            if(!boss._deleting && currentMapId) {
+                boss._deleting = true;
+                deleteDoc(doc(db, `maps/${currentMapId}/bosses`, boss.id)).catch(console.error);
+            }
+            return;
+        }
+
         const remainingMeta = targetEpoch - now;
         if (remainingMeta <= 0) {
             isSpawned = true;
@@ -351,11 +360,21 @@ ui.saveBoss.onclick = async () => {
         const totalMin = (h * 60) + m;
 
         const nowd = new Date();
-        const targetDate = new Date(nowd.getFullYear(), nowd.getMonth(), nowd.getDate(), h, m, 0, 0);
+        let targetEpoch = new Date(nowd.getFullYear(), nowd.getMonth(), nowd.getDate(), h, m, 0, 0).getTime();
+        const EIGHT_HOURS = 8 * 60 * 60 * 1000;
+
+        // Smart rollover for times typed near midnight
+        if (targetEpoch < Date.now() - EIGHT_HOURS) targetEpoch += 24 * 60 * 60 * 1000;
+        else if (targetEpoch > Date.now() + EIGHT_HOURS) targetEpoch -= 24 * 60 * 60 * 1000;
+
+        if (Math.abs(targetEpoch - Date.now()) > EIGHT_HOURS) {
+            alert("Cannot track a time that is more than 8 hours into the past or future!");
+            return;
+        }
 
         await addDoc(collection(db, `maps/${currentMapId}/bosses`), {
             name: name,
-            targetTime: targetDate.getTime(),
+            targetTime: targetEpoch,
             hhmmStr: timeStr,
             respawnLengthMin: totalMin 
         });
