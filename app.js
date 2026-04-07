@@ -171,6 +171,14 @@ function renderBossCards() {
     ui.bossList.innerHTML = '';
     const now = Date.now();
 
+    // Sort: closest respawn first, unkilled at the bottom
+    globalBossesData.sort((a, b) => {
+        if (a.targetTime && b.targetTime) return a.targetTime - b.targetTime;
+        if (a.targetTime) return -1;
+        if (b.targetTime) return 1;
+        return a.name.localeCompare(b.name, undefined, {numeric: true});
+    });
+
     globalBossesData.forEach(boss => {
         let timerText = "00:00:00";
         let isSpawned = false;
