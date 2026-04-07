@@ -22,19 +22,19 @@ const db = getFirestore(app);
 const AdminEmails = ["mizstpz@gmail.com", "flosslnw4@gmail.com"];
 
 const EP_DATA = {
-    13: ["Alemeth Forest(95)", "Barha Forest(98)", "Kalejimas Lounge(101)", "Investigation Room(103)"],
-    12: ["Coastal Fortress(90)", "Dingofasil District(91)", "Storage Quarter(92)", "Fortress Battlegrounds(93)"],
-    11: ["Laukyme Swamp(85)", "Tyla Monastery(86)", "Bellai Rainforest(87)", "Zeraha(88)", "Seir Rainforest(89)"],
-    10: ["Penitence Route(80)", "Main Building(81)", "Grand Corridor(82)", "Sanctuary(83)"],
-    9: ["Goddess Ancient Garden(75)", "Fedimian Suburbs(76)", "Mage Tower 1F(77)", "Mage Tower 2F(78)", "Mage Tower 3F(79)"],
-    8: ["Baron Allerno(70)", "Aqueduct Bridge Area(70)", "Demon Prison District 1(71)", "Demon Prison District 3(72)", "Demon Prison District 4(73)", "Demon Prison District 5(74)"],
-    7: ["Rukas Plateau(60)", "King's Plateau(61)", "Zachariel Crossroads(62)", "Royal Mausoleum 1F(64)", "Royal Mausoleum 2F(66)", "Royal Mausoleum 3F(68)"],
-    6: ["Dina Bee Farm(50)", "Vilna Forest(52)", "Uskis Arable Land(54)", "Spring Light Woods(56)", "Gate Route(57)", "Sirdgela Forest(58)", "Kvailas Forest(59)", "Origin Forest(60)"],
-    5: ["Karolis Springs(40)", "Letas Stream(42)", "Delmore Hamlet(44)", "Delmore Manor(46)", "Delmore Outskirts(48)"],
-    4: ["Veja Ravine(30)", "Vieta Gorge(31)", "Cobalt Forest(32)", "Septyni Glen(34)", "Pelke Shrine Ruins(36)", "Absenta Reservoir(38)"],
-    3: ["Koru Jungle(20)", "Knidos Jungle(21)", "Dadan Jungle(22)", "Novaha Assembly Hall(24)", "Novaha Annex(26)", "Novaha Institute(28)"],
-    2: ["Srautas Gorge(10)", "Gele Plateau(11)", "Nefritas Cliff(12)", "Tenet Garden(13)", "Tenet Church B1F(15)", "Tenet Church 1F(17)", "Tenet Church 2F(19)"],
-    1: ["Siauliai W. Forest(1)", "Siauliai E. Forest(3)", "Lemprasa Pond(5)", "Siauliai Miners Village(7)", "Crystal Mine(9)"]
+    13: [{id:"Alemeth Forest",label:"Alemeth Forest(95)"},{id:"Barha Forest",label:"Barha Forest(98)"},{id:"Kalejimas Lounge",label:"Kalejimas Lounge(101)"},{id:"Investigation Room",label:"Investigation Room(103)"}],
+    12: [{id:"Coastal Fortress",label:"Coastal Fortress(90)"},{id:"Dingofasil District",label:"Dingofasil District(91)"},{id:"Storage Quarter",label:"Storage Quarter(92)"},{id:"Fortress Battlegrounds",label:"Fortress Battlegrounds(93)"}],
+    11: [{id:"Laukyme Swamp",label:"Laukyme Swamp(85)"},{id:"Tyla Monastery",label:"Tyla Monastery(86)"},{id:"Bellai Rainforest",label:"Bellai Rainforest(87)"},{id:"Zeraha",label:"Zeraha(88)"},{id:"Seir Rainforest",label:"Seir Rainforest(89)"}],
+    10: [{id:"Penitence Route",label:"Penitence Route(80)"},{id:"Main Building",label:"Main Building(81)"},{id:"Grand Corridor",label:"Grand Corridor(82)"},{id:"Sanctuary",label:"Sanctuary(83)"}],
+    9:  [{id:"Goddess Ancient Garden",label:"Goddess Ancient Garden(75)"},{id:"Fedimian Suburbs",label:"Fedimian Suburbs(76)"},{id:"Mage Tower 1F",label:"Mage Tower 1F(77)"},{id:"Mage Tower 2F",label:"Mage Tower 2F(78)"},{id:"Mage Tower 3F",label:"Mage Tower 3F(79)"}],
+    8:  [{id:"Baron Allerno",label:"Baron Allerno(70)"},{id:"Aqueduct Bridge Area",label:"Aqueduct Bridge Area(70)"},{id:"Demon Prison District 1",label:"Demon Prison District 1(71)"},{id:"Demon Prison District 3",label:"Demon Prison District 3(72)"},{id:"Demon Prison District 4",label:"Demon Prison District 4(73)"},{id:"Demon Prison District 5",label:"Demon Prison District 5(74)"}],
+    7:  [{id:"Rukas Plateau",label:"Rukas Plateau(60)"},{id:"King's Plateau",label:"King's Plateau(61)"},{id:"Zachariel Crossroads",label:"Zachariel Crossroads(62)"},{id:"Royal Mausoleum 1F",label:"Royal Mausoleum 1F(64)"},{id:"Royal Mausoleum 2F",label:"Royal Mausoleum 2F(66)"},{id:"Royal Mausoleum 3F",label:"Royal Mausoleum 3F(68)"}],
+    6:  [{id:"Dina Bee Farm",label:"Dina Bee Farm(50)"},{id:"Vilna Forest",label:"Vilna Forest(52)"},{id:"Uskis Arable Land",label:"Uskis Arable Land(54)"},{id:"Spring Light Woods",label:"Spring Light Woods(56)"},{id:"Gate Route",label:"Gate Route(57)"},{id:"Sirdgela Forest",label:"Sirdgela Forest(58)"},{id:"Kvailas Forest",label:"Kvailas Forest(59)"},{id:"Origin Forest",label:"Origin Forest(60)"}],
+    5:  [{id:"Karolis Springs",label:"Karolis Springs(40)"},{id:"Letas Stream",label:"Letas Stream(42)"},{id:"Delmore Hamlet",label:"Delmore Hamlet(44)"},{id:"Delmore Manor",label:"Delmore Manor(46)"},{id:"Delmore Outskirts",label:"Delmore Outskirts(48)"}],
+    4:  [{id:"Veja Ravine",label:"Veja Ravine(30)"},{id:"Vieta Gorge",label:"Vieta Gorge(31)"},{id:"Cobalt Forest",label:"Cobalt Forest(32)"},{id:"Septyni Glen",label:"Septyni Glen(34)"},{id:"Pelke Shrine Ruins",label:"Pelke Shrine Ruins(36)"},{id:"Absenta Reservoir",label:"Absenta Reservoir(38)"}],
+    3:  [{id:"Koru Jungle",label:"Koru Jungle(20)"},{id:"Knidos Jungle",label:"Knidos Jungle(21)"},{id:"Dadan Jungle",label:"Dadan Jungle(22)"},{id:"Novaha Assembly Hall",label:"Novaha Assembly Hall(24)"},{id:"Novaha Annex",label:"Novaha Annex(26)"},{id:"Novaha Institute",label:"Novaha Institute(28)"}],
+    2:  [{id:"Srautas Gorge",label:"Srautas Gorge(10)"},{id:"Gele Plateau",label:"Gele Plateau(11)"},{id:"Nefritas Cliff",label:"Nefritas Cliff(12)"},{id:"Tenet Garden",label:"Tenet Garden(13)"},{id:"Tenet Church B1F",label:"Tenet Church B1F(15)"},{id:"Tenet Church 1F",label:"Tenet Church 1F(17)"},{id:"Tenet Church 2F",label:"Tenet Church 2F(19)"}],
+    1:  [{id:"Siauliai W. Forest",label:"Siauliai W. Forest(1)"},{id:"Siauliai E. Forest",label:"Siauliai E. Forest(3)"},{id:"Lemprasa Pond",label:"Lemprasa Pond(5)"},{id:"Siauliai Miners Village",label:"Siauliai Miners Village(7)"},{id:"Crystal Mine",label:"Crystal Mine(9)"}]
 };
 
 let currentEP = "13";
@@ -273,7 +273,7 @@ function getFireIconHTML(epKey = null, mapName = null) {
     } else if (epKey) {
         // Check all maps in EP
         const epMaps = EP_DATA[epKey] || [];
-        isFire = globalAllBosses.some(b => epMaps.includes(b.mapId) && b.targetTime && (b.targetTime - now) <= FIVE_MINS);
+        isFire = globalAllBosses.some(b => epMaps.some(m => m.id === b.mapId) && b.targetTime && (b.targetTime - now) <= FIVE_MINS);
     }
 
     return isFire ? ' <span style="color: #ef4444; text-shadow: 0 0 5px rgba(239, 68, 68, 0.5);">🔥</span>' : '';
@@ -284,7 +284,7 @@ function startGlobalListeners() {
     if (Object.keys(globalMapListeners).length > 0) return; // Already started
 
     Object.keys(EP_DATA).forEach(ep => {
-        EP_DATA[ep].forEach(mapId => {
+        EP_DATA[ep].forEach(({id: mapId}) => {
             const q = query(collection(db, `maps/${mapId}/bosses`));
             globalMapListeners[mapId] = onSnapshot(q, (snapshot) => {
                 // Remove old bosses for this map
@@ -317,11 +317,12 @@ function updateTabIcons() {
 
     // Update Map tabs
     Array.from(ui.mapTabs.children).forEach(t => {
-        const mName = t.getAttribute('data-map');
-        if (!mName) return;
-        const fire = getFireIconHTML(null, mName);
-        if (t.innerHTML !== mName + fire) {
-            t.innerHTML = mName + fire;
+        const mId = t.getAttribute('data-map');
+        const mLabel = t.getAttribute('data-map-label');
+        if (!mId || !mLabel) return;
+        const fire = getFireIconHTML(null, mId);
+        if (t.innerHTML !== mLabel + fire) {
+            t.innerHTML = mLabel + fire;
         }
     });
 }
@@ -357,15 +358,16 @@ function selectEP(epKey) {
     if (maps && maps.length > 0) {
         // Sort maps descending by reversing the array so later maps show up first
         const sortedMaps = maps.slice().reverse();
-        sortedMaps.forEach(mapName => {
+        sortedMaps.forEach(map => {
             const btn = document.createElement('div');
             btn.className = `tab`;
-            btn.setAttribute('data-map', mapName);
-            btn.innerHTML = mapName + getFireIconHTML(null, mapName);
-            btn.onclick = () => selectMap(mapName);
+            btn.setAttribute('data-map', map.id);
+            btn.setAttribute('data-map-label', map.label);
+            btn.innerHTML = map.label + getFireIconHTML(null, map.id);
+            btn.onclick = () => selectMap(map.id);
             ui.mapTabs.appendChild(btn);
         });
-        selectMap(sortedMaps[0]);
+        selectMap(sortedMaps[0].id);
     } else {
         ui.mapTabs.innerHTML = '<div class="empty-state" style="padding:0; margin:0; font-size: 0.85rem;">No maps here yet</div>';
         currentMapId = null;
