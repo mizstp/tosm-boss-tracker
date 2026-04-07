@@ -174,14 +174,22 @@ function renderBossCards() {
     globalBossesData.forEach(boss => {
         let timerText = "00:00:00";
         let isSpawned = false;
+        let spawnTimeText = "Waiting for kill...";
 
         if (boss.targetTime) {
+            // Calculate the absolute clock time of respawn
+            const spawnDate = new Date(boss.targetTime);
+            const sH = spawnDate.getHours().toString().padStart(2, '0');
+            const sM = spawnDate.getMinutes().toString().padStart(2, '0');
+            spawnTimeText = `Spawns at: ${sH}:${sM}`;
+
             const remainingMeta = boss.targetTime - now;
             if (remainingMeta <= 0) {
                 isSpawned = true;
                 timerText = "SPAWNED!";
+                spawnTimeText = "Spawned!";
             } else {
-                // Calculate hh:mm:ss
+                // Calculate hh:mm:ss for countdown
                 const totalSeconds = Math.floor(remainingMeta / 1000);
                 const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
                 const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
@@ -201,7 +209,8 @@ function renderBossCards() {
         card.innerHTML = `
             <div class="boss-info">
                 <h4>Channel ${boss.name}</h4>
-                <p>Respawn: ${rH}:${rM}</p>
+                <p>Respawn rule: ${rH}h ${rM}m</p>
+                <p style="color: var(--primary); font-weight: bold; margin-top: 4px;">${spawnTimeText}</p>
             </div>
             <div class="timer-display ${isSpawned ? 'spawned' : ''}">${timerText}</div>
             <div class="boss-actions">
