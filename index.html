@@ -53,9 +53,10 @@
             <header class="app-header card-glass">
                 <h2>Boss Tracker sv.Giltine</h2>
                 <div class="header-actions">
+                    <button id="admin-btn" class="btn danger-btn sm-btn" style="display: none;">🛠️ Admin</button>
                     <!-- <button id="donate-btn" class="btn donate-btn sm-btn">💖 Support</button> -->
                     <span id="user-display-email"></span>
-                    <button id="logout-btn" class="btn danger-btn sm-btn">Logout</button>
+                    <button id="logout-btn" class="btn outline-btn sm-btn">Logout</button>
                 </div>
             </header>
 
@@ -141,6 +142,81 @@
                 <div class="modal-actions" style="justify-content: center; margin-top: 1rem;">
                     <button id="close-donate-btn" class="btn primary-btn"
                         style="background: linear-gradient(135deg, #ff758c 0%, #ff7eb3 100%);">Thank You!</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Dashboard Modal -->
+        <div id="admin-modal" class="modal" style="align-items: flex-start; padding-top: 2rem;">
+            <div class="modal-content card-glass" style="max-width: 800px; width: 95%;">
+                <h3 style="color: var(--danger);">Admin Control Panel</h3>
+                
+                <div class="tabs-container" style="padding: 0; margin-bottom: 1rem;">
+                    <div class="tabs-scroll" style="width: 100%;">
+                        <div class="tab active-tab" id="tab-logs" style="border-radius: 8px;">Action Logs</div>
+                        <div class="tab" id="tab-members" style="border-radius: 8px;">Members</div>
+                        <div class="tab" id="tab-roles" style="border-radius: 8px;">Roles</div>
+                    </div>
+                </div>
+
+                <!-- Logs Tab -->
+                <div id="admin-logs-content">
+                    <div style="max-height: 350px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                        <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 0.85rem;">
+                            <thead style="position: sticky; top: 0; background: #0f172a;">
+                                <tr style="border-bottom: 1px solid var(--card-border);">
+                                    <th style="padding: 0.8rem; color: var(--primary);">User</th>
+                                    <th style="padding: 0.8rem; color: var(--primary);">Action</th>
+                                    <th style="padding: 0.8rem; color: var(--primary);">Time</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-logs-tbody">
+                                <tr><td colspan="3" style="padding: 0.8rem;">Loading logs...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Members Tab -->
+                <div id="admin-members-content" style="display: none;">
+                    <div style="max-height: 350px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                        <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 0.85rem;">
+                            <thead style="position: sticky; top: 0; background: #0f172a;">
+                                <tr style="border-bottom: 1px solid var(--card-border);">
+                                    <th style="padding: 0.8rem; color: var(--primary);">Email</th>
+                                    <th style="padding: 0.8rem; color: var(--primary);">Role</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-members-tbody">
+                                <tr><td colspan="2" style="padding: 0.8rem;">Loading members...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Roles Tab -->
+                <div id="admin-roles-content" style="display: none;">
+                    <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                        <h4 style="margin-bottom: 0.5rem; color: var(--primary);">Create New Role</h4>
+                        <div class="input-group">
+                            <input type="text" id="new-role-name" placeholder="Role Name (e.g. Moderator)">
+                        </div>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; font-size: 0.85rem;">
+                            <label><input type="checkbox" id="perm-admin"> Admin Menu</label>
+                            <label><input type="checkbox" id="perm-create"> Create (Map/Channel)</label>
+                            <label><input type="checkbox" id="perm-del-channel"> Delete Channel</label>
+                            <label><input type="checkbox" id="perm-del-all"> Delete Everything</label>
+                        </div>
+                        <button id="save-role-btn" class="btn primary-btn sm-btn">Save Role</button>
+                    </div>
+
+                    <h4 style="margin-bottom: 0.5rem; color: var(--text-muted);">Existing Roles</h4>
+                    <ul id="roles-list" style="max-height: 150px; overflow-y: auto; list-style: none; font-size: 0.85rem; background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 8px;">
+                    </ul>
+                </div>
+
+                <div class="modal-actions" style="justify-content: flex-end; margin-top: 1rem;">
+                    <button id="close-admin-btn" class="btn text-btn">Close Panel</button>
                 </div>
             </div>
         </div>

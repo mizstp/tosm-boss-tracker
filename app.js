@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, setDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { qrData } from "./bdata.js";
 
 // Your Firebase configuration from the screenshot
@@ -18,6 +18,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+const AdminEmails = ["mizstpz@gmail.com", "flosslnw4@gmail.com"];
 
 // ----------------- DOM ELEMENTS -----------------
 const views = {
@@ -56,6 +58,18 @@ const ui = {
     donateModal: document.getElementById('donate-modal'),
     closeDonateBtn: document.getElementById('close-donate-btn'),
 
+    adminBtn: document.getElementById('admin-btn'),
+    adminModal: document.getElementById('admin-modal'),
+    closeAdminBtn: document.getElementById('close-admin-btn'),
+    tabLogs: document.getElementById('tab-logs'),
+    tabBans: document.getElementById('tab-bans'),
+    adminLogsContent: document.getElementById('admin-logs-content'),
+    adminBansContent: document.getElementById('admin-bans-content'),
+    adminLogsList: document.getElementById('admin-logs-list'),
+    banEmailInput: document.getElementById('ban-email-input'),
+    banUserBtn: document.getElementById('ban-user-btn'),
+    bannedUsersList: document.getElementById('banned-users-list'),
+
     typeAbsolute: document.getElementById('type-absolute'),
     typeDuration: document.getElementById('type-duration'),
     timeInputLabel: document.getElementById('time-input-label')
@@ -80,6 +94,19 @@ let bossesUnsubscribe = null;
 let updateInterval = null;
 let globalBossesData = [];
 
+// ----------------- AUDIT LOGS -----------------
+async function logActivity(action, details) {
+    if(!auth.currentUser) return;
+    try {
+        await addDoc(collection(db, "auditLogs"), {
+            action: action,
+            details: details,
+            userEmail: auth.currentUser.email,
+            timestamp: serverTimestamp()
+        });
+    } catch(e) { console.error("Failed to log activity:", e); }
+}
+
 // ----------------- ROUTING / VIEWS -----------------
 function switchView(viewName) {
     Object.values(views).forEach(v => v.classList.remove('active'));
@@ -87,8 +114,20 @@ function switchView(viewName) {
 }
 
 // ----------------- AUTHENTICATION -----------------
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
     if (user) {
+        // Check if user is Banned
+        const banDoc = await getDoc(doc(db, "bannedUsers", user.email.toLowerCase()));
+        if(banDoc.exists()) {
+            alert("Your account has been banned due to disturbance. Access Denied.");
+            signOut(auth);
+            return;
+        }
+
+        // Check if user is Admin
+        const isAdmin = AdminEmails.includes(user.email.toLowerCase());
+        ui.adminBtn.style.display = isAdmin ? 'block' : 'none';
+
         switchView('dashboard');
         forms.userEmail.textContent = user.email;
         loadMaps(); // Start syncing data from database when logged in
@@ -321,11 +360,11 @@ function updateTimers() {
     });
 }
 
-// Function removed as "Die" logic is no longer used
 window.deleteBoss = async (bossId) => {
     if(!currentMapId) return;
     if(confirm('Are you sure you want to remove this channel?')) {
         await deleteDoc(doc(db, `maps/${currentMapId}/bosses`, bossId));
+        logActivity("Remove Channel", `Removed channel ID ${bossId} from map ID ${currentMapId}`);
     }
 };
 
@@ -337,6 +376,7 @@ ui.saveMap.onclick = async () => {
     const val = ui.newMapName.value.trim();
     if(val) {
         await addDoc(collection(db, "maps"), { name: val });
+        logActivity("Create Map", val);
         ui.mapModal.classList.remove('show');
         ui.newMapName.value = '';
     }
@@ -345,9 +385,11 @@ ui.saveMap.onclick = async () => {
 ui.deleteMapBtn.onclick = async () => {
     if(!currentMapId) return;
     if(confirm('Are you sure you want to delete this map entirely? All channels inside will be lost.')) {
+        const deletedMapName = ui.currentMapTitle.textContent;
         // Technically this leaves dangling bosses in Firestore logic unless deleted recursively,
         // but it removes it from UI, keeping it simple for the free tier for now.
         await deleteDoc(doc(db, "maps", currentMapId));
+        logActivity("Delete Map", deletedMapName);
         currentMapId = null;
         ui.currentMapTitle.textContent = "Select a Map";
         ui.addBossBtn.style.display = 'none';
@@ -434,10 +476,112 @@ ui.saveBoss.onclick = async () => {
             hhmmStr: saveHhMmStr,
             respawnLengthMin: totalMin 
         });
+        logActivity("Add Channel", `Map [${ui.currentMapTitle.textContent}] Channel [${name}] | Time Set: ${saveHhMmStr}`);
         ui.bossModal.classList.remove('show');
         ui.newBossName.value = '';
         ui.newBossTime.value = '';
     } else {
         alert("Please enter a valid channel number and time in HH:MM format (like '02:30').");
+    }
+};
+
+// ----------------- ADMIN UI LOGIC -----------------
+let adminLogsUnsubscribe = null;
+let adminBansUnsubscribe = null;
+
+if (ui.adminBtn) {
+    ui.adminBtn.onclick = () => {
+        ui.adminModal.classList.add('show');
+        loadAdminLogs();
+        loadAdminBans();
+    };
+
+    ui.closeAdminBtn.onclick = () => {
+        ui.adminModal.classList.remove('show');
+        if (adminLogsUnsubscribe) adminLogsUnsubscribe();
+        if (adminBansUnsubscribe) adminBansUnsubscribe();
+    };
+
+    ui.tabLogs.onclick = () => {
+        ui.tabLogs.classList.add('active-tab');
+        ui.tabBans.classList.remove('active-tab');
+        ui.adminLogsContent.style.display = 'block';
+        ui.adminBansContent.style.display = 'none';
+    };
+
+    ui.tabBans.onclick = () => {
+        ui.tabBans.classList.add('active-tab');
+        ui.tabLogs.classList.remove('active-tab');
+        ui.adminBansContent.style.display = 'block';
+        ui.adminLogsContent.style.display = 'none';
+    };
+
+    ui.banUserBtn.onclick = async () => {
+        const emailToBan = ui.banEmailInput.value.trim().toLowerCase();
+        if (emailToBan) {
+            if (AdminEmails.includes(emailToBan)) {
+                alert("Cannot ban another admin.");
+                return;
+            }
+            if(confirm(`Are you sure you want to BAN ${emailToBan}?`)) {
+                await setDoc(doc(db, "bannedUsers", emailToBan), { 
+                    bannedAt: serverTimestamp(), 
+                    bannedBy: auth.currentUser.email 
+                });
+                ui.banEmailInput.value = '';
+            }
+        }
+    };
+}
+
+function loadAdminLogs() {
+    ui.adminLogsList.innerHTML = "<li>Loading logs...</li>";
+    const q = query(collection(db, "auditLogs"), orderBy("timestamp", "desc"), limit(50));
+    adminLogsUnsubscribe = onSnapshot(q, (snapshot) => {
+        ui.adminLogsList.innerHTML = '';
+        if (snapshot.empty) {
+             ui.adminLogsList.innerHTML = "<li>No recent logs.</li>";
+             return;
+        }
+        snapshot.forEach(docSnap => {
+             const d = docSnap.data();
+             const timeStr = d.timestamp ? new Date(d.timestamp.toMillis()).toLocaleString() : "Just now";
+             const li = document.createElement('li');
+             li.style.marginBottom = "0.8rem";
+             li.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
+             li.style.paddingBottom = "0.5rem";
+             li.innerHTML = `<strong style="color: var(--primary);">${d.userEmail || 'Unknown'}</strong> <span style="font-size: 0.75rem; color: var(--text-muted);">[${timeStr}]</span><br><span style="color: var(--text-main);">${d.action}</span>: <span style="color: var(--text-muted);">${d.details}</span>`;
+             ui.adminLogsList.appendChild(li);
+        });
+    });
+}
+
+function loadAdminBans() {
+    const q = query(collection(db, "bannedUsers"));
+    adminBansUnsubscribe = onSnapshot(q, (snapshot) => {
+        ui.bannedUsersList.innerHTML = '';
+        if (snapshot.empty) {
+             ui.bannedUsersList.innerHTML = "<li style='color: var(--text-muted);'>No banned users.</li>";
+             return;
+        }
+        snapshot.forEach(docSnap => {
+             const email = docSnap.id;
+             const li = document.createElement('li');
+             li.style.display = "flex";
+             li.style.alignItems = "center";
+             li.style.justifyContent = "space-between";
+             li.style.marginBottom = "0.5rem";
+             li.style.padding = "0.5rem";
+             li.style.background = "rgba(15,23,42,0.6)";
+             li.style.borderRadius = "6px";
+             li.innerHTML = `<span style="word-break: break-all; margin-right: 1rem;">${email}</span> <button class="btn outline-btn sm-btn" style="color: var(--danger); border-color: var(--danger);" onclick="unbanUser('${email}')">Unban</button>`;
+             ui.bannedUsersList.appendChild(li);
+        });
+    });
+}
+
+window.unbanUser = async (email) => {
+    if(confirm(`Are you sure you want to unban ${email}? They will be able to log in again.`)) {
+        await deleteDoc(doc(db, "bannedUsers", email));
     }
 };
