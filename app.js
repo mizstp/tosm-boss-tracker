@@ -96,10 +96,13 @@ const ui = {
     clearLogsBtn: document.getElementById('clear-logs-btn'),
 
     newRoleName: document.getElementById('new-role-name'),
+    permView: document.getElementById('perm-view'),
     permAdmin: document.getElementById('perm-admin'),
     permCreate: document.getElementById('perm-create'),
     permDelChannel: document.getElementById('perm-del-channel'),
     permDelAll: document.getElementById('perm-del-all'),
+    noAccessPanel: document.getElementById('no-access-panel'),
+    mainContent: document.getElementById('main-content'),
     saveRoleBtn: document.getElementById('save-role-btn'),
     rolesList: document.getElementById('roles-list'),
 
@@ -128,7 +131,7 @@ let updateInterval = null;
 let globalBossesData = [];
 
 // Permissions state
-let currentUserPerms = { admin: false, create: false, delete_channel: false, delete_all: false };
+let currentUserPerms = { view: false, admin: false, create: false, delete_channel: false, delete_all: false };
 
 // ----------------- AUDIT LOGS -----------------
 async function logActivity(action, details) {
@@ -155,52 +158,26 @@ onAuthStateChanged(auth, async (user) => {
         const uEmail = user.email.toLowerCase();
 
         let currentRoleId = null;
-        let isFirstLogin = false;
         const memRef = doc(db, "members", uEmail);
         const memDoc = await getDoc(memRef);
 
-        if (!memDoc.exists()) {
-            isFirstLogin = true;
-        } else {
+        if (memDoc.exists()) {
             currentRoleId = memDoc.data().roleId;
         }
 
-        // Auto-assign "Users" role only on the very first login
-        if (isFirstLogin) {
-            const rolesSnap = await getDocs(collection(db, "roles"));
-            let defaultRoleId = null;
-            rolesSnap.forEach(r => {
-                if (r.data().name.toLowerCase() === "users") {
-                    defaultRoleId = r.id;
-                }
-            });
-            if (defaultRoleId) {
-                currentRoleId = defaultRoleId;
-            }
-        }
+        // Track user in 'members' (no auto role assignment)
+        await setDoc(memRef, { email: user.email, lastLogin: serverTimestamp() }, { merge: true });
 
-        // 1. Keep track of user in 'members'
-        const memberData = {
-            email: user.email,
-            lastLogin: serverTimestamp()
-        };
-        // If it's their very first login and we found the default role, set it.
-        // Otherwise, leave their roleId exactly as it is (so admins can strip roles completely).
-        if (isFirstLogin && currentRoleId) {
-            memberData.roleId = currentRoleId;
-        }
-
-        await setDoc(memRef, memberData, { merge: true });
-
-        // 2. Resolve Permissions
-        let perms = { admin: false, create: false, delete_channel: false, delete_all: false };
+        // Resolve Permissions
+        let perms = { view: false, admin: false, create: false, delete_channel: false, delete_all: false };
         if (AdminEmails.includes(uEmail)) {
-            perms = { admin: true, create: true, delete_channel: true, delete_all: true };
+            perms = { view: true, admin: true, create: true, delete_channel: true, delete_all: true };
         } else {
             if (currentRoleId) {
                 const roleDoc = await getDoc(doc(db, "roles", currentRoleId));
                 if (roleDoc.exists()) {
                     const rp = roleDoc.data();
+                    if (rp.view) perms.view = true;
                     if (rp.admin) perms.admin = true;
                     if (rp.create) perms.create = true;
                     if (rp.delChannel) perms.delete_channel = true;
@@ -210,12 +187,14 @@ onAuthStateChanged(auth, async (user) => {
         }
         currentUserPerms = perms;
 
-        // Apply visual access right away
+        // Apply visual access
         ui.adminBtn.style.display = currentUserPerms.admin ? 'block' : 'none';
+        ui.noAccessPanel.style.display = currentUserPerms.view ? 'none' : 'block';
+        ui.mainContent.style.display = currentUserPerms.view ? 'block' : 'none';
 
         switchView('dashboard');
         forms.userEmail.textContent = user.email;
-        loadMaps(); // Start syncing data from database when logged in
+        if (currentUserPerms.view) loadMaps();
     } else {
         switchView('auth');
         // Cleanup listeners when logged out
@@ -841,12 +820,14 @@ if (ui.adminBtn) {
 
         await setDoc(doc(collection(db, "roles")), {
             name: rName,
+            view: ui.permView.checked,
             admin: ui.permAdmin.checked,
             create: ui.permCreate.checked,
             delChannel: ui.permDelChannel.checked,
             delAll: ui.permDelAll.checked
         });
         ui.newRoleName.value = '';
+        ui.permView.checked = false;
         ui.permAdmin.checked = false;
         ui.permCreate.checked = false;
         ui.permDelChannel.checked = false;
@@ -864,6 +845,7 @@ function loadAdminRoles() {
             globalRolesList.push(r);
 
             let permsText = [];
+            if (r.view) permsText.push("View");
             if (r.admin) permsText.push("Admin Dashboard");
             if (r.create) permsText.push("Create");
             if (r.delChannel) permsText.push("Delete Channel");

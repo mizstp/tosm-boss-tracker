@@ -61,6 +61,13 @@
                 </div>
             </header>
 
+            <div id="no-access-panel" class="card-glass" style="display:none; text-align:center; padding: 3rem 2rem;">
+                <p style="font-size: 2rem; margin-bottom: 1rem;">🔒</p>
+                <h3 style="margin-bottom: 0.5rem;">No Access</h3>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">You don't have permission to view the tracker.<br>Contact an admin to get access.</p>
+            </div>
+
+            <div id="main-content">
             <div class="tabs-container card-glass" style="flex-direction: column; align-items: stretch; gap: 0; padding: 0;">
                 <div class="tabs-scroll" id="ep-tabs" style="border-bottom: 1px solid var(--card-border); padding: 0.8rem 1rem;">
                     <!-- EP Tabs go here -->
@@ -84,6 +91,7 @@
                     <div class="empty-state">No map selected or no channels yet.</div>
                 </div>
             </div>
+            </div> <!-- /main-content -->
         </main>
 
 
@@ -210,6 +218,7 @@
                             <input type="text" id="new-role-name" placeholder="Role Name (e.g. Moderator)">
                         </div>
                         <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; font-size: 0.85rem;">
+                            <label><input type="checkbox" id="perm-view"> View</label>
                             <label><input type="checkbox" id="perm-admin"> Admin Menu</label>
                             <label><input type="checkbox" id="perm-create"> Create (Map/Channel)</label>
                             <label><input type="checkbox" id="perm-del-channel"> Delete Channel</label>
