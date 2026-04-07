@@ -54,8 +54,24 @@ const ui = {
     
     donateBtn: document.getElementById('donate-btn'),
     donateModal: document.getElementById('donate-modal'),
-    closeDonateBtn: document.getElementById('close-donate-btn')
+    closeDonateBtn: document.getElementById('close-donate-btn'),
+
+    typeAbsolute: document.getElementById('type-absolute'),
+    typeDuration: document.getElementById('type-duration'),
+    timeInputLabel: document.getElementById('time-input-label')
 };
+
+// Time Type Toggles
+if (ui.typeAbsolute && ui.typeDuration) {
+    ui.typeAbsolute.addEventListener('change', () => {
+        ui.timeInputLabel.textContent = "Target Time (24-Hour)";
+        ui.newBossTime.placeholder = "E.g. 14:30";
+    });
+    ui.typeDuration.addEventListener('change', () => {
+        ui.timeInputLabel.textContent = "Duration (HH:MM from now)";
+        ui.newBossTime.placeholder = "E.g. 02:15";
+    });
+}
 
 // ----------------- APP STATE -----------------
 let currentMapId = null;
@@ -377,23 +393,40 @@ ui.saveBoss.onclick = async () => {
         const m = parseInt(parts[1]) || 0;
         const totalMin = (h * 60) + m;
 
-        const nowd = new Date();
-        let targetEpoch = new Date(nowd.getFullYear(), nowd.getMonth(), nowd.getDate(), h, m, 0, 0).getTime();
+        let targetEpoch = 0;
         const EIGHT_HOURS = 8 * 60 * 60 * 1000;
+        let isDuration = ui.typeDuration.checked;
+        let saveHhMmStr = "";
 
-        // Smart rollover for times typed near midnight
-        if (targetEpoch < Date.now() - EIGHT_HOURS) targetEpoch += 24 * 60 * 60 * 1000;
-        else if (targetEpoch > Date.now() + EIGHT_HOURS) targetEpoch -= 24 * 60 * 60 * 1000;
+        if (isDuration) {
+            targetEpoch = Date.now() + ((h * 60 * 60 * 1000) + (m * 60 * 1000));
+            // Convert to absolute string for legacy fallback
+            const resD = new Date(targetEpoch);
+            saveHhMmStr = resD.getHours().toString().padStart(2,'0') + ":" + resD.getMinutes().toString().padStart(2,'0');
 
-        if (Math.abs(targetEpoch - Date.now()) > EIGHT_HOURS) {
-            alert("Cannot track a time that is more than 8 hours into the past or future!");
-            return;
+            if (targetEpoch > Date.now() + EIGHT_HOURS) {
+                alert("Cannot track a countdown duration longer than 8 hours!");
+                return;
+            }
+        } else {
+            const nowd = new Date();
+            targetEpoch = new Date(nowd.getFullYear(), nowd.getMonth(), nowd.getDate(), h, m, 0, 0).getTime();
+            saveHhMmStr = timeStr;
+
+            // Smart rollover for times typed near midnight
+            if (targetEpoch < Date.now() - EIGHT_HOURS) targetEpoch += 24 * 60 * 60 * 1000;
+            else if (targetEpoch > Date.now() + EIGHT_HOURS) targetEpoch -= 24 * 60 * 60 * 1000;
+
+            if (Math.abs(targetEpoch - Date.now()) > EIGHT_HOURS) {
+                alert("Cannot track a time that is more than 8 hours into the past or future!");
+                return;
+            }
         }
 
         await addDoc(collection(db, `maps/${currentMapId}/bosses`), {
             name: name,
             targetTime: targetEpoch,
-            hhmmStr: timeStr,
+            hhmmStr: saveHhMmStr,
             respawnLengthMin: totalMin 
         });
         ui.bossModal.classList.remove('show');
