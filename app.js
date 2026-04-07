@@ -152,6 +152,10 @@ onAuthStateChanged(auth, async (user) => {
                     if(rp.delChannel) perms.delete_channel = true;
                     if(rp.delAll) perms.delete_all = true;
                 }
+            } else {
+                // DEFAULT PERMISSIONS for regular users with no custom role assigned
+                perms.create = true;
+                perms.delete_channel = true;
             }
         }
         currentUserPerms = perms;
@@ -400,6 +404,10 @@ function updateTimers() {
 }
 
 window.deleteBoss = async (bossId) => {
+    if(!currentUserPerms.delete_channel && !currentUserPerms.delete_all) {
+        alert("You do not have permission to delete channels.");
+        return;
+    }
     if(!currentMapId) return;
     if(confirm('Are you sure you want to remove this channel?')) {
         await deleteDoc(doc(db, `maps/${currentMapId}/bosses`, bossId));
@@ -412,6 +420,10 @@ window.deleteBoss = async (bossId) => {
 ui.addTabBtn.onclick = () => ui.mapModal.classList.add('show');
 ui.cancelMap.onclick = () => { ui.mapModal.classList.remove('show'); ui.newMapName.value = ''; };
 ui.saveMap.onclick = async () => {
+    if(!currentUserPerms.create) {
+        alert("You do not have permission to create maps.");
+        return;
+    }
     const val = ui.newMapName.value.trim();
     if(val) {
         await addDoc(collection(db, "maps"), { name: val });
@@ -422,6 +434,10 @@ ui.saveMap.onclick = async () => {
 };
 
 ui.deleteMapBtn.onclick = async () => {
+    if(!currentUserPerms.delete_all) {
+        alert("You do not have permission to delete maps.");
+        return;
+    }
     if(!currentMapId) return;
     if(confirm('Are you sure you want to delete this map entirely? All channels inside will be lost.')) {
         const deletedMapName = ui.currentMapTitle.textContent;
@@ -470,6 +486,10 @@ ui.newBossTime.addEventListener('input', function(e) {
 });
 
 ui.saveBoss.onclick = async () => {
+    if(!currentUserPerms.create) {
+        alert("You do not have permission to create channels.");
+        return;
+    }
     const name = ui.newBossName.value.trim();
     const timeStr = ui.newBossTime.value.trim();
     
