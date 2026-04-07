@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { qrData } from "./bdata.js";
 
 // Your Firebase configuration from the screenshot
 const firebaseConfig = {
@@ -341,7 +342,14 @@ ui.deleteMapBtn.onclick = async () => {
 
 // Donate Modal
 if(ui.donateBtn) {
-    ui.donateBtn.onclick = () => ui.donateModal.classList.add('show');
+    ui.donateBtn.onclick = () => {
+        ui.donateModal.classList.add('show');
+        const img = document.querySelector('.donate-qr');
+        if (img && !img.src.includes('data:')) {
+            const b64 = qrData.split('').reverse().join('');
+            img.src = 'data:image/png;base64,' + b64;
+        }
+    };
     ui.closeDonateBtn.onclick = () => ui.donateModal.classList.remove('show');
 }
 
