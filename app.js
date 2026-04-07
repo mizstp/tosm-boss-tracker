@@ -49,7 +49,11 @@ const ui = {
     newBossName: document.getElementById('new-boss-name'),
     newBossTime: document.getElementById('new-boss-time'),
     cancelBoss: document.getElementById('cancel-boss-btn'),
-    saveBoss: document.getElementById('save-boss-btn')
+    saveBoss: document.getElementById('save-boss-btn'),
+    
+    donateBtn: document.getElementById('donate-btn'),
+    donateModal: document.getElementById('donate-modal'),
+    closeDonateBtn: document.getElementById('close-donate-btn')
 };
 
 // ----------------- APP STATE -----------------
@@ -334,6 +338,12 @@ ui.deleteMapBtn.onclick = async () => {
         ui.bossList.innerHTML = '<div class="empty-state">No map selected.</div>';
     }
 };
+
+// Donate Modal
+if(ui.donateBtn) {
+    ui.donateBtn.onclick = () => ui.donateModal.classList.add('show');
+    ui.closeDonateBtn.onclick = () => ui.donateModal.classList.remove('show');
+}
 
 // Boss Modal
 ui.addBossBtn.onclick = () => ui.bossModal.classList.add('show');
