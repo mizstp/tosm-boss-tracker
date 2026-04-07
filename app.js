@@ -377,9 +377,14 @@ ui.cancelBoss.onclick = () => { ui.bossModal.classList.remove('show'); ui.newBos
 ui.newBossTime.addEventListener('input', function(e) {
     if (e.inputType === 'deleteContentBackward') return;
     let val = this.value.replace(/[^\d]/g, '');
-    if (val.length >= 2) {
+    
+    if (ui.typeDuration.checked && val.length === 1) {
+        // For Countdown, auto-prepend 0 for hours since max game respawn is 6 hrs
+        val = '0' + val + ':';
+    } else if (val.length >= 2) {
         val = val.substring(0, 2) + (val.length > 2 ? ':' + val.substring(2, 4) : ':');
     }
+    
     this.value = val;
 });
 
