@@ -22,19 +22,19 @@ const db = getFirestore(app);
 const AdminEmails = ["mizstpz@gmail.com", "flosslnw4@gmail.com"];
 
 const EP_DATA = {
-    13: ["Alemeth Forest", "Barha Forest", "Kalejimas Lounge", "Investigation Room"],
-    12: ["Coastal Fortress", "Dingofasil District", "Storage Quarter", "Fortress Battlegrounds"],
-    11: ["Laukyme Swamp", "Tyla Monastery", "Bellai Rainforest", "Zeraha", "Seir Rainforest"],
-    10: ["Penitence Route", "Main Building", "Grand Corridor", "Sanctuary"],
-    9: ["Goddess Ancient Garden", "Fedimian", "Fedimian Suburbs", "Mage Tower 1F", "Mage Tower 2F", "Mage Tower 3F"],
-    8: ["Baron Allerno", "Aqueduct Bridge Area", "Demon Prison District 1", "Demon Prison District 3", "Demon Prison District 4", "Demon Prison District 5", "Gindari Gorge"],
-    7: ["Rukas Plateau", "King's Plateau", "Zachariel Crossroads", "Mocia Forest", "Royal Mausoleum 1F", "Royal Mausoleum 2F", "Royal Mausoleum 3F"],
-    6: ["Dina Bee Farm", "Vilna Forest", "Uskis Arable Land", "Spring Light Woods", "Gate Route", "Sirdgela Forest", "Kvailas Forest", "Origin Forest"],
-    5: ["Karolis Springs", "Letas Stream", "Delmore Hamlet", "Delmore Manor", "Delmore Outskirts", "Pilgrim Road"],
-    4: ["Veja Ravine", "Vieta Gorge", "Cobalt Forest", "Septyni Glen", "Pelke Shrine Ruins", "Absenta Reservoir", "Tenants Farm"],
-    3: ["Koru Jungle", "Knidos Jungle", "Dadan Jungle", "Novaha Assembly Hall", "Novaha Annex", "Novaha Institute", "Mirkiti Farm"],
-    2: ["Srautas Gorge", "Gele Plateau", "Nefritas Cliff", "Tenet Garden", "Tenet Church B1F", "Tenet Church 1F", "Tenet Church 2F"],
-    1: ["Klaipeda", "Siauliai W. Forest", "Siauliai E. Forest", "Lemprasa Pond", "Siauliai Miners Village", "Crystal Mine"]
+    13: ["Alemeth Forest(95)", "Barha Forest(98)", "Kalejimas Lounge(101)", "Investigation Room(103)"],
+    12: ["Coastal Fortress(90)", "Dingofasil District(91)", "Storage Quarter(92)", "Fortress Battlegrounds(93)"],
+    11: ["Laukyme Swamp(85)", "Tyla Monastery(86)", "Bellai Rainforest(87)", "Zeraha(88)", "Seir Rainforest(89)"],
+    10: ["Penitence Route(80)", "Main Building(81)", "Grand Corridor(82)", "Sanctuary(83)"],
+    9: ["Goddess Ancient Garden(75)", "Fedimian Suburbs(76)", "Mage Tower 1F(77)", "Mage Tower 2F(78)", "Mage Tower 3F(79)"],
+    8: ["Baron Allerno(70)", "Aqueduct Bridge Area(70)", "Demon Prison District 1(71)", "Demon Prison District 3(72)", "Demon Prison District 4(73)", "Demon Prison District 5(74)"],
+    7: ["Rukas Plateau(60)", "King's Plateau(61)", "Zachariel Crossroads(62)", "Royal Mausoleum 1F(64)", "Royal Mausoleum 2F(66)", "Royal Mausoleum 3F(68)"],
+    6: ["Dina Bee Farm(50)", "Vilna Forest(52)", "Uskis Arable Land(54)", "Spring Light Woods(56)", "Gate Route(57)", "Sirdgela Forest(58)", "Kvailas Forest(59)", "Origin Forest(60)"],
+    5: ["Karolis Springs(40)", "Letas Stream(42)", "Delmore Hamlet(44)", "Delmore Manor(46)", "Delmore Outskirts(48)"],
+    4: ["Veja Ravine(30)", "Vieta Gorge(31)", "Cobalt Forest(32)", "Septyni Glen(34)", "Pelke Shrine Ruins(36)", "Absenta Reservoir(38)"],
+    3: ["Koru Jungle(20)", "Knidos Jungle(21)", "Dadan Jungle(22)", "Novaha Assembly Hall(24)", "Novaha Annex(26)", "Novaha Institute(28)"],
+    2: ["Srautas Gorge(10)", "Gele Plateau(11)", "Nefritas Cliff(12)", "Tenet Garden(13)", "Tenet Church B1F(15)", "Tenet Church 1F(17)", "Tenet Church 2F(19)"],
+    1: ["Siauliai W. Forest(1)", "Siauliai E. Forest(3)", "Lemprasa Pond(5)", "Siauliai Miners Village(7)", "Crystal Mine(9)"]
 };
 
 let currentEP = "13";
