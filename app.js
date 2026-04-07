@@ -61,14 +61,24 @@ const ui = {
     adminBtn: document.getElementById('admin-btn'),
     adminModal: document.getElementById('admin-modal'),
     closeAdminBtn: document.getElementById('close-admin-btn'),
+    
     tabLogs: document.getElementById('tab-logs'),
-    tabBans: document.getElementById('tab-bans'),
+    tabMembers: document.getElementById('tab-members'),
+    tabRoles: document.getElementById('tab-roles'),
     adminLogsContent: document.getElementById('admin-logs-content'),
-    adminBansContent: document.getElementById('admin-bans-content'),
-    adminLogsList: document.getElementById('admin-logs-list'),
-    banEmailInput: document.getElementById('ban-email-input'),
-    banUserBtn: document.getElementById('ban-user-btn'),
-    bannedUsersList: document.getElementById('banned-users-list'),
+    adminMembersContent: document.getElementById('admin-members-content'),
+    adminRolesContent: document.getElementById('admin-roles-content'),
+    
+    adminLogsTbody: document.getElementById('admin-logs-tbody'),
+    adminMembersTbody: document.getElementById('admin-members-tbody'),
+    
+    newRoleName: document.getElementById('new-role-name'),
+    permAdmin: document.getElementById('perm-admin'),
+    permCreate: document.getElementById('perm-create'),
+    permDelChannel: document.getElementById('perm-del-channel'),
+    permDelAll: document.getElementById('perm-del-all'),
+    saveRoleBtn: document.getElementById('save-role-btn'),
+    rolesList: document.getElementById('roles-list'),
 
     typeAbsolute: document.getElementById('type-absolute'),
     typeDuration: document.getElementById('type-duration'),
@@ -94,6 +104,9 @@ let bossesUnsubscribe = null;
 let updateInterval = null;
 let globalBossesData = [];
 
+// Permissions state
+let currentUserPerms = { admin: false, create: false, delete_channel: false, delete_all: false };
+
 // ----------------- AUDIT LOGS -----------------
 async function logActivity(action, details) {
     if(!auth.currentUser) return;
@@ -116,17 +129,36 @@ function switchView(viewName) {
 // ----------------- AUTHENTICATION -----------------
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        // Check if user is Banned
-        const banDoc = await getDoc(doc(db, "bannedUsers", user.email.toLowerCase()));
-        if(banDoc.exists()) {
-            alert("Your account has been banned due to disturbance. Access Denied.");
-            signOut(auth);
-            return;
-        }
+        const uEmail = user.email.toLowerCase();
+        
+        // 1. Keep track of user in 'members'
+        await setDoc(doc(db, "members", uEmail), {
+            email: user.email,
+            lastLogin: serverTimestamp()
+        }, { merge: true });
 
-        // Check if user is Admin
-        const isAdmin = AdminEmails.includes(user.email.toLowerCase());
-        ui.adminBtn.style.display = isAdmin ? 'block' : 'none';
+        // 2. Resolve Permissions
+        let perms = { admin: false, create: false, delete_channel: false, delete_all: false };
+        if (AdminEmails.includes(uEmail)) {
+            perms = { admin: true, create: true, delete_channel: true, delete_all: true };
+        } else {
+            const memDoc = await getDoc(doc(db, "members", uEmail));
+            if(memDoc.exists() && memDoc.data().roleId) {
+                const roleDoc = await getDoc(doc(db, "roles", memDoc.data().roleId));
+                if(roleDoc.exists()) {
+                    const rp = roleDoc.data();
+                    if(rp.admin) perms.admin = true;
+                    if(rp.create) perms.create = true;
+                    if(rp.delChannel) perms.delete_channel = true;
+                    if(rp.delAll) perms.delete_all = true;
+                }
+            }
+        }
+        currentUserPerms = perms;
+
+        // Apply visual access right away
+        ui.adminBtn.style.display = currentUserPerms.admin ? 'block' : 'none';
+        ui.addTabBtn.style.display = currentUserPerms.create ? 'flex' : 'none';
 
         switchView('dashboard');
         forms.userEmail.textContent = user.email;
@@ -192,8 +224,10 @@ function loadMaps() {
 function selectMap(id, name) {
     currentMapId = id;
     ui.currentMapTitle.textContent = name;
-    ui.addBossBtn.style.display = 'block';
-    ui.deleteMapBtn.style.display = 'block';
+    
+    // UI perms apply
+    ui.addBossBtn.style.display = currentUserPerms.create ? 'block' : 'none';
+    ui.deleteMapBtn.style.display = currentUserPerms.delete_all ? 'block' : 'none';
     
     // update tab UI
     document.querySelectorAll('.tab').forEach(t => {
@@ -281,10 +315,15 @@ function renderBossCards() {
                 <p class="rule-text" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.2rem;">Respawn time: ${sH}:${sM}</p>
                 <p class="spawn-time-text" style="color: var(--primary); font-weight: bold; margin-top: 4px; font-variant-numeric: tabular-nums; font-size: 1.1rem;"></p>
             </div>
-            <div class="boss-actions">
-                <button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}')" style="color: var(--danger); font-size: 1.2rem; font-weight: bold;" title="Remove Channel">X</button>
-            </div>
         `;
+        
+        if(currentUserPerms.delete_all || currentUserPerms.delete_channel) {
+            const delDiv = document.createElement('div');
+            delDiv.className = 'boss-actions';
+            delDiv.innerHTML = `<button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}')" style="color: var(--danger); font-size: 1.2rem; font-weight: bold;" title="Remove Channel">X</button>`;
+            card.appendChild(delDiv);
+        }
+
         ui.bossList.appendChild(card);
     });
 
@@ -485,103 +524,168 @@ ui.saveBoss.onclick = async () => {
     }
 };
 
-// ----------------- ADMIN UI LOGIC -----------------
+// ----------------- ADMIN UI LOGIC (RBAC) -----------------
 let adminLogsUnsubscribe = null;
-let adminBansUnsubscribe = null;
+let adminMembersUnsubscribe = null;
+let adminRolesUnsubscribe = null;
+
+let globalRolesList = [];
+
+// Tab Display Helper
+function switchAdminTab(showId) {
+    ui.adminLogsContent.style.display = 'none';
+    ui.adminMembersContent.style.display = 'none';
+    ui.adminRolesContent.style.display = 'none';
+    ui.tabLogs.classList.remove('active-tab');
+    ui.tabMembers.classList.remove('active-tab');
+    ui.tabRoles.classList.remove('active-tab');
+    
+    if(showId === 'logs') { ui.adminLogsContent.style.display = 'block'; ui.tabLogs.classList.add('active-tab'); }
+    if(showId === 'members') { ui.adminMembersContent.style.display = 'block'; ui.tabMembers.classList.add('active-tab'); }
+    if(showId === 'roles') { ui.adminRolesContent.style.display = 'block'; ui.tabRoles.classList.add('active-tab'); }
+}
 
 if (ui.adminBtn) {
     ui.adminBtn.onclick = () => {
         ui.adminModal.classList.add('show');
+        loadAdminRoles(); // Fetch roles first so members dropdown has data mapped
         loadAdminLogs();
-        loadAdminBans();
     };
 
     ui.closeAdminBtn.onclick = () => {
         ui.adminModal.classList.remove('show');
         if (adminLogsUnsubscribe) adminLogsUnsubscribe();
-        if (adminBansUnsubscribe) adminBansUnsubscribe();
+        if (adminMembersUnsubscribe) adminMembersUnsubscribe();
+        if (adminRolesUnsubscribe) adminRolesUnsubscribe();
     };
 
-    ui.tabLogs.onclick = () => {
-        ui.tabLogs.classList.add('active-tab');
-        ui.tabBans.classList.remove('active-tab');
-        ui.adminLogsContent.style.display = 'block';
-        ui.adminBansContent.style.display = 'none';
-    };
+    ui.tabLogs.onclick = () => switchAdminTab('logs');
+    ui.tabMembers.onclick = () => switchAdminTab('members');
+    ui.tabRoles.onclick = () => switchAdminTab('roles');
 
-    ui.tabBans.onclick = () => {
-        ui.tabBans.classList.add('active-tab');
-        ui.tabLogs.classList.remove('active-tab');
-        ui.adminBansContent.style.display = 'block';
-        ui.adminLogsContent.style.display = 'none';
-    };
-
-    ui.banUserBtn.onclick = async () => {
-        const emailToBan = ui.banEmailInput.value.trim().toLowerCase();
-        if (emailToBan) {
-            if (AdminEmails.includes(emailToBan)) {
-                alert("Cannot ban another admin.");
-                return;
-            }
-            if(confirm(`Are you sure you want to BAN ${emailToBan}?`)) {
-                await setDoc(doc(db, "bannedUsers", emailToBan), { 
-                    bannedAt: serverTimestamp(), 
-                    bannedBy: auth.currentUser.email 
-                });
-                ui.banEmailInput.value = '';
-            }
-        }
+    // Save Role Button
+    ui.saveRoleBtn.onclick = async () => {
+        const rName = ui.newRoleName.value.trim();
+        if(!rName) { alert("Need Role Name"); return; }
+        
+        await setDoc(doc(collection(db, "roles")), {
+            name: rName,
+            admin: ui.permAdmin.checked,
+            create: ui.permCreate.checked,
+            delChannel: ui.permDelChannel.checked,
+            delAll: ui.permDelAll.checked
+        });
+        ui.newRoleName.value = '';
+        ui.permAdmin.checked = false;
+        ui.permCreate.checked = false;
+        ui.permDelChannel.checked = false;
+        ui.permDelAll.checked = false;
     };
 }
 
+function loadAdminRoles() {
+    const q = query(collection(db, "roles"));
+    adminRolesUnsubscribe = onSnapshot(q, (snapshot) => {
+        ui.rolesList.innerHTML = '';
+        globalRolesList = [];
+        snapshot.forEach(docSnap => {
+             const r = {id: docSnap.id, ...docSnap.data()};
+             globalRolesList.push(r);
+             
+             let permsText = [];
+             if(r.admin) permsText.push("Admin Dashboard");
+             if(r.create) permsText.push("Create");
+             if(r.delChannel) permsText.push("Delete Channel");
+             if(r.delAll) permsText.push("Delete Everything");
+             
+             const li = document.createElement('li');
+             li.style.marginBottom = "0.6rem";
+             li.style.padding = "0.5rem";
+             li.style.background = "rgba(255,255,255,0.05)";
+             li.style.borderRadius = "4px";
+             li.style.display = "flex";
+             li.style.justifyContent = "space-between";
+             li.style.alignItems = "center";
+             li.innerHTML = `
+                <div>
+                   <strong style="color:var(--primary);">${r.name}</strong><br>
+                   <span style="color:var(--text-muted); font-size: 0.75rem;">${permsText.join(', ') || 'No Permissions'}</span>
+                </div>
+                <button class="btn text-btn sm-btn" style="color: var(--danger); padding:0;" onclick="deleteRole('${r.id}')">Delete</button>
+             `;
+             ui.rolesList.appendChild(li);
+        });
+        loadAdminMembers(); // Once roles are loaded, render Members (so dropdown selects have roles)
+    });
+}
+
 function loadAdminLogs() {
-    ui.adminLogsList.innerHTML = "<li>Loading logs...</li>";
-    const q = query(collection(db, "auditLogs"), orderBy("timestamp", "desc"), limit(50));
+    ui.adminLogsTbody.innerHTML = "<tr><td colspan='3' style='padding: 0.8rem;'>Loading...</td></tr>";
+    const q = query(collection(db, "auditLogs"), orderBy("timestamp", "desc"), limit(60));
     adminLogsUnsubscribe = onSnapshot(q, (snapshot) => {
-        ui.adminLogsList.innerHTML = '';
+        ui.adminLogsTbody.innerHTML = '';
         if (snapshot.empty) {
-             ui.adminLogsList.innerHTML = "<li>No recent logs.</li>";
+             ui.adminLogsTbody.innerHTML = "<tr><td colspan='3' style='padding: 0.8rem;'>No recent logs.</td></tr>";
              return;
         }
         snapshot.forEach(docSnap => {
              const d = docSnap.data();
-             const timeStr = d.timestamp ? new Date(d.timestamp.toMillis()).toLocaleString() : "Just now";
-             const li = document.createElement('li');
-             li.style.marginBottom = "0.8rem";
-             li.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
-             li.style.paddingBottom = "0.5rem";
-             li.innerHTML = `<strong style="color: var(--primary);">${d.userEmail || 'Unknown'}</strong> <span style="font-size: 0.75rem; color: var(--text-muted);">[${timeStr}]</span><br><span style="color: var(--text-main);">${d.action}</span>: <span style="color: var(--text-muted);">${d.details}</span>`;
-             ui.adminLogsList.appendChild(li);
+             const timeStr = d.timestamp ? new Date(d.timestamp.toMillis()).toLocaleString() : "Now";
+             const tr = document.createElement('tr');
+             tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
+             tr.innerHTML = `
+                <td style="padding: 0.5rem; color:var(--text-main);">${d.userEmail || 'Unknown'}</td>
+                <td style="padding: 0.5rem; color:var(--text-muted);">${d.action} <span style="font-size:0.75rem">(${d.details})</span></td>
+                <td style="padding: 0.5rem; color:var(--text-muted); font-size:0.75rem;">${timeStr}</td>
+             `;
+             ui.adminLogsTbody.appendChild(tr);
         });
     });
 }
 
-function loadAdminBans() {
-    const q = query(collection(db, "bannedUsers"));
-    adminBansUnsubscribe = onSnapshot(q, (snapshot) => {
-        ui.bannedUsersList.innerHTML = '';
+function loadAdminMembers() {
+    const q = query(collection(db, "members"));
+    if(adminMembersUnsubscribe) adminMembersUnsubscribe();
+    adminMembersUnsubscribe = onSnapshot(q, (snapshot) => {
+        ui.adminMembersTbody.innerHTML = '';
         if (snapshot.empty) {
-             ui.bannedUsersList.innerHTML = "<li style='color: var(--text-muted);'>No banned users.</li>";
+             ui.adminMembersTbody.innerHTML = "<tr><td colspan='2' style='padding: 0.8rem;'>No members found.</td></tr>";
              return;
         }
         snapshot.forEach(docSnap => {
+             const d = docSnap.data();
              const email = docSnap.id;
-             const li = document.createElement('li');
-             li.style.display = "flex";
-             li.style.alignItems = "center";
-             li.style.justifyContent = "space-between";
-             li.style.marginBottom = "0.5rem";
-             li.style.padding = "0.5rem";
-             li.style.background = "rgba(15,23,42,0.6)";
-             li.style.borderRadius = "6px";
-             li.innerHTML = `<span style="word-break: break-all; margin-right: 1rem;">${email}</span> <button class="btn outline-btn sm-btn" style="color: var(--danger); border-color: var(--danger);" onclick="unbanUser('${email}')">Unban</button>`;
-             ui.bannedUsersList.appendChild(li);
+             let roleOptionsHTML = `<option value="">-- No Permissions --</option>`;
+             globalRolesList.forEach(r => {
+                 const sel = (d.roleId === r.id) ? "selected" : "";
+                 roleOptionsHTML += `<option value="${r.id}" ${sel}>${r.name}</option>`;
+             });
+
+             const tr = document.createElement('tr');
+             tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
+             
+             // Superadmin badge override
+             let selectBlock = `<select onchange="updateMemberRole('${email}', this.value)" style="background:rgba(15,23,42,0.8); color:white; padding:0.4rem; border-radius:4px; border:1px solid var(--card-border); max-width: 150px;">${roleOptionsHTML}</select>`;
+             if (AdminEmails.includes(email)) {
+                 selectBlock = `<span style="color:#f59e0b; font-weight:bold;">Super Admin (Locked)</span>`;
+             }
+
+             tr.innerHTML = `
+                <td style="padding: 0.8rem; color:var(--text-main); word-break: break-all;">${email}</td>
+                <td style="padding: 0.8rem;">${selectBlock}</td>
+             `;
+             ui.adminMembersTbody.appendChild(tr);
         });
     });
 }
 
-window.unbanUser = async (email) => {
-    if(confirm(`Are you sure you want to unban ${email}? They will be able to log in again.`)) {
-        await deleteDoc(doc(db, "bannedUsers", email));
+window.deleteRole = async (roleId) => {
+    if(confirm("Delete this role entirely? Members assigned to this role will lose their special permissions.")) {
+        await deleteDoc(doc(db, "roles", roleId));
     }
+};
+
+window.updateMemberRole = async (email, roleId) => {
+    // Empty value = remove role entirely (back to basic authenticated user)
+    await updateDoc(doc(db, "members", email), { roleId: roleId });
 };
