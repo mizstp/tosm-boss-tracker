@@ -170,12 +170,34 @@ function renderBossCards() {
 
     ui.bossList.innerHTML = '';
 
-    // Sort: closest respawn first, unkilled at the bottom
+    // pre-compute target times for sorting
+    const nowSort = Date.now();
+    globalBossesData.forEach(boss => {
+        if (!boss.targetTime) {
+            let sH = 0, sM = 0;
+            if(boss.hhmmStr) {
+                const p = boss.hhmmStr.split(':');
+                sH = parseInt(p[0]) || 0;
+                sM = parseInt(p[1]) || 0;
+            } else if (boss.respawnLengthMin) {
+                sH = Math.floor(boss.respawnLengthMin / 60);
+                sM = boss.respawnLengthMin % 60;
+            }
+            const d = new Date();
+            d.setHours(sH, sM, 0, 0);
+            boss._sortTime = d.getTime();
+        } else {
+            boss._sortTime = boss.targetTime;
+        }
+    });
+
+    // Sort: un-spawned first (by closest time), then spawned (started) stages at bottom
     globalBossesData.sort((a, b) => {
-        if (a.targetTime && b.targetTime) return a.targetTime - b.targetTime;
-        if (a.targetTime) return -1;
-        if (b.targetTime) return 1;
-        return a.name.localeCompare(b.name, undefined, {numeric: true});
+        const aSpawned = a._sortTime <= nowSort;
+        const bSpawned = b._sortTime <= nowSort;
+        if(aSpawned && !bSpawned) return 1;
+        if(!aSpawned && bSpawned) return -1;
+        return a._sortTime - b._sortTime;
     });
 
     globalBossesData.forEach(boss => {
@@ -183,18 +205,24 @@ function renderBossCards() {
         card.className = 'boss-card';
         card.id = `boss-card-${boss.id}`;
         
-        const rH = Math.floor(boss.respawnLengthMin / 60).toString().padStart(2, '0');
-        const rM = (boss.respawnLengthMin % 60).toString().padStart(2, '0');
+        let sH="00", sM="00";
+        if(boss.hhmmStr) {
+            const p = boss.hhmmStr.split(':');
+            sH = p[0].padStart(2, '0');
+            sM = p[1].padStart(2, '0');
+        } else if (boss.respawnLengthMin) {
+            sH = Math.floor(boss.respawnLengthMin / 60).toString().padStart(2, '0');
+            sM = (boss.respawnLengthMin % 60).toString().padStart(2, '0');
+        }
 
         card.innerHTML = `
             <div class="boss-info">
                 <h4>Channel ${boss.name}</h4>
-                <p class="rule-text" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.2rem;">Respawn time: ${rH}:${rM}</p>
+                <p class="rule-text" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.2rem;">Respawn time: ${sH}:${sM}</p>
                 <p class="spawn-time-text" style="color: var(--primary); font-weight: bold; margin-top: 4px; font-variant-numeric: tabular-nums; font-size: 1.1rem;"></p>
             </div>
             <div class="boss-actions">
-                <button class="btn primary-btn sm-btn" onclick="killBoss('${boss.id}', ${boss.respawnLengthMin})" style="white-space: nowrap; padding: 0.6rem 1.4rem;">Die</button>
-                <button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}')" style="color: var(--danger)" title="Remove Channel">X</button>
+                <button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}')" style="color: var(--danger); font-size: 1.2rem; font-weight: bold;" title="Remove Channel">X</button>
             </div>
         `;
         ui.bossList.appendChild(card);
@@ -212,30 +240,40 @@ function updateTimers() {
         const ruleText = card.querySelector('.rule-text');
         const spawnText = card.querySelector('.spawn-time-text');
         
-        const rH = Math.floor(boss.respawnLengthMin / 60).toString().padStart(2, '0');
-        const rM = (boss.respawnLengthMin % 60).toString().padStart(2, '0');
+        let sH="00", sM="00";
+        if(boss.hhmmStr) {
+            const p = boss.hhmmStr.split(':');
+            sH = p[0].padStart(2, '0');
+            sM = p[1].padStart(2, '0');
+        } else if (boss.respawnLengthMin) {
+            sH = Math.floor(boss.respawnLengthMin / 60).toString().padStart(2, '0');
+            sM = (boss.respawnLengthMin % 60).toString().padStart(2, '0');
+        }
 
         let isSpawned = false;
-        let sText = "Waiting for kill...";
-        let rText = `Respawn time: ${rH}:${rM}`;
+        let sText = "";
+        let rText = `Respawn time: ${sH}:${sM}`;
 
-        if (boss.targetTime) {
-            const spawnDate = new Date(boss.targetTime);
-            const sH = spawnDate.getHours().toString().padStart(2, '0');
-            const sM = spawnDate.getMinutes().toString().padStart(2, '0');
-            rText = `Respawn time: ${sH}:${sM}`;
+        let targetEpoch = boss.targetTime;
+        if(!targetEpoch) {
+            const d = new Date();
+            d.setHours(parseInt(sH));
+            d.setMinutes(parseInt(sM));
+            d.setSeconds(0);
+            d.setMilliseconds(0);
+            targetEpoch = d.getTime();
+        }
 
-            const remainingMeta = boss.targetTime - now;
-            if (remainingMeta <= 0) {
-                isSpawned = true;
-                sText = "Spawned!";
-            } else {
-                const totalSeconds = Math.floor(remainingMeta / 1000);
-                const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
-                const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
-                const s = (totalSeconds % 60).toString().padStart(2, '0');
-                sText = `Waiting in... ${h}:${m}:${s}`;
-            }
+        const remainingMeta = targetEpoch - now;
+        if (remainingMeta <= 0) {
+            isSpawned = true;
+            sText = "Stage start!!!";
+        } else {
+            const totalSeconds = Math.floor(remainingMeta / 1000);
+            const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+            const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+            const s = (totalSeconds % 60).toString().padStart(2, '0');
+            sText = `Waiting in... ${h}:${m}:${s}`;
         }
 
         if (ruleText.textContent !== rText) {
@@ -253,16 +291,7 @@ function updateTimers() {
     });
 }
 
-// Window scope function triggered by the inline HTML onclick
-window.killBoss = async (bossId, respawnMins) => {
-    if(!currentMapId) return;
-    const targetTime = Date.now() + (respawnMins * 60 * 1000);
-    const bossRef = doc(db, `maps/${currentMapId}/bosses`, bossId);
-    await updateDoc(bossRef, {
-        targetTime: targetTime
-    });
-};
-
+// Function removed as "Die" logic is no longer used
 window.deleteBoss = async (bossId) => {
     if(!currentMapId) return;
     if(confirm('Are you sure you want to remove this channel?')) {
@@ -310,10 +339,14 @@ ui.saveBoss.onclick = async () => {
         const m = parseInt(parts[1]) || 0;
         const totalMin = (h * 60) + m;
 
+        const nowd = new Date();
+        const targetDate = new Date(nowd.getFullYear(), nowd.getMonth(), nowd.getDate(), h, m, 0, 0);
+
         await addDoc(collection(db, `maps/${currentMapId}/bosses`), {
             name: name,
-            respawnLengthMin: totalMin,
-            targetTime: null 
+            targetTime: targetDate.getTime(),
+            hhmmStr: timeStr,
+            respawnLengthMin: totalMin 
         });
         ui.bossModal.classList.remove('show');
         ui.newBossName.value = '';
