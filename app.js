@@ -351,7 +351,7 @@ function renderBossCards() {
         if(currentUserPerms.delete_all || currentUserPerms.delete_channel) {
             const delDiv = document.createElement('div');
             delDiv.className = 'boss-actions';
-            delDiv.innerHTML = `<button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}')" style="color: var(--danger); font-size: 1.2rem; font-weight: bold;" title="Remove Channel">X</button>`;
+            delDiv.innerHTML = `<button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}', '${boss.name}')" style="color: var(--danger); font-size: 1.2rem; font-weight: bold;" title="Remove Channel">X</button>`;
             card.appendChild(delDiv);
         }
 
@@ -430,7 +430,7 @@ function updateTimers() {
     });
 }
 
-window.deleteBoss = async (bossId) => {
+window.deleteBoss = async (bossId, bossName) => {
     if(!currentUserPerms.delete_channel && !currentUserPerms.delete_all) {
         alert("You do not have permission to delete channels.");
         return;
@@ -438,7 +438,7 @@ window.deleteBoss = async (bossId) => {
     if(!currentMapId) return;
     if(confirm('Are you sure you want to remove this channel?')) {
         await deleteDoc(doc(db, `maps/${currentMapId}/bosses`, bossId));
-        logActivity("Remove Channel", `Removed channel ID ${bossId} from map ID ${currentMapId}`);
+        logActivity("Remove Channel", `Removed channel [${bossName}] from map [${ui.currentMapTitle.textContent}]`);
     }
 };
 
