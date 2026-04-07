@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, setDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, getDocs, setDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { qrData } from "./bdata.js";
 
 // Your Firebase configuration from the screenshot
@@ -131,31 +131,58 @@ onAuthStateChanged(auth, async (user) => {
     if (user) {
         const uEmail = user.email.toLowerCase();
         
+        let currentRoleId = null;
+        let isFirstLogin = false;
+        const memRef = doc(db, "members", uEmail);
+        const memDoc = await getDoc(memRef);
+
+        if (!memDoc.exists()) {
+            isFirstLogin = true;
+        } else {
+            currentRoleId = memDoc.data().roleId;
+        }
+
+        // Auto-assign "Users" role only on the very first login
+        if (isFirstLogin) {
+            const rolesSnap = await getDocs(collection(db, "roles"));
+            let defaultRoleId = null;
+            rolesSnap.forEach(r => {
+                if (r.data().name.toLowerCase() === "users") {
+                    defaultRoleId = r.id;
+                }
+            });
+            if (defaultRoleId) {
+                currentRoleId = defaultRoleId;
+            }
+        }
+
         // 1. Keep track of user in 'members'
-        await setDoc(doc(db, "members", uEmail), {
+        const memberData = {
             email: user.email,
             lastLogin: serverTimestamp()
-        }, { merge: true });
+        };
+        // If it's their very first login and we found the default role, set it.
+        // Otherwise, leave their roleId exactly as it is (so admins can strip roles completely).
+        if(isFirstLogin && currentRoleId) {
+            memberData.roleId = currentRoleId;
+        }
+        
+        await setDoc(memRef, memberData, { merge: true });
 
         // 2. Resolve Permissions
         let perms = { admin: false, create: false, delete_channel: false, delete_all: false };
         if (AdminEmails.includes(uEmail)) {
             perms = { admin: true, create: true, delete_channel: true, delete_all: true };
         } else {
-            const memDoc = await getDoc(doc(db, "members", uEmail));
-            if(memDoc.exists() && memDoc.data().roleId) {
-                const roleDoc = await getDoc(doc(db, "roles", memDoc.data().roleId));
-                if(roleDoc.exists()) {
+            if (currentRoleId) {
+                const roleDoc = await getDoc(doc(db, "roles", currentRoleId));
+                if (roleDoc.exists()) {
                     const rp = roleDoc.data();
                     if(rp.admin) perms.admin = true;
                     if(rp.create) perms.create = true;
                     if(rp.delChannel) perms.delete_channel = true;
                     if(rp.delAll) perms.delete_all = true;
                 }
-            } else {
-                // DEFAULT PERMISSIONS for regular users with no custom role assigned
-                perms.create = true;
-                perms.delete_channel = true;
             }
         }
         currentUserPerms = perms;
