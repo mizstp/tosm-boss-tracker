@@ -191,12 +191,12 @@ function renderBossCards() {
         }
     });
 
-    // Sort: un-spawned first (by closest time), then spawned (started) stages at bottom
+    // Sort: Started stages at the top, then upcoming stages
     globalBossesData.sort((a, b) => {
         const aSpawned = a._sortTime <= nowSort;
         const bSpawned = b._sortTime <= nowSort;
-        if(aSpawned && !bSpawned) return 1;
-        if(!aSpawned && bSpawned) return -1;
+        if(aSpawned && !bSpawned) return -1;
+        if(!aSpawned && bSpawned) return 1;
         return a._sortTime - b._sortTime;
     });
 
