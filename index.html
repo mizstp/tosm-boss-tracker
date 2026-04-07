@@ -87,19 +87,19 @@
                 </div>
                 
                 <div class="input-group" style="margin-bottom: 0.5rem;">
-                    <div style="display: flex; gap: 1.5rem; color: var(--text-main);">
+                    <div style="display: flex; flex-wrap: nowrap; gap: 1.5rem; color: var(--text-main); white-space: nowrap;">
                         <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.9rem;">
-                            <input type="radio" name="time-type" value="absolute" id="type-absolute" checked> Clock Time
+                            <input type="radio" name="time-type" value="duration" id="type-duration" checked> Countdown
                         </label>
                         <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.9rem;">
-                            <input type="radio" name="time-type" value="duration" id="type-duration"> Countdown
+                            <input type="radio" name="time-type" value="absolute" id="type-absolute"> Clock Time
                         </label>
                     </div>
                 </div>
 
                 <div class="input-group">
-                    <label id="time-input-label">Target Time (24-Hour)</label>
-                    <input type="text" id="new-boss-time" placeholder="E.g. 14:30" maxlength="5">
+                    <label id="time-input-label">Duration (HH:MM from now)</label>
+                    <input type="text" id="new-boss-time" placeholder="E.g. 02:15" maxlength="5">
                 </div>
                 <div class="modal-actions">
                     <button id="cancel-boss-btn" class="btn text-btn">Cancel</button>
