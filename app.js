@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, getDocs, setDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, getDocs, setDoc, orderBy, limit, deleteField } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { qrData } from "./bdata.js";
 
 // Your Firebase configuration from the screenshot
@@ -69,6 +69,12 @@ const ui = {
     newBossTime: document.getElementById('new-boss-time'),
     cancelBoss: document.getElementById('cancel-boss-btn'),
     saveBoss: document.getElementById('save-boss-btn'),
+
+    stageModal: document.getElementById('stage-modal'),
+    stageModalTitle: document.getElementById('stage-modal-title'),
+    stageInput: document.getElementById('stage-input'),
+    cancelStage: document.getElementById('cancel-stage-btn'),
+    saveStage: document.getElementById('save-stage-btn'),
 
     donateBtn: document.getElementById('donate-btn'),
     donateModal: document.getElementById('donate-modal'),
@@ -489,6 +495,7 @@ function renderBossCards() {
         actionsDiv.className = 'boss-actions';
         let actHtml = '';
         if (currentUserPerms.create) {
+            actHtml += `<button class="btn text-btn sm-btn" id="stage-btn-${boss.id}" style="display:none; color: #f97316; font-size: 1.2rem;" title="Set Stage" onclick="setStage('${boss.id}', '${boss.name}')">📊</button>`;
             actHtml += `<button class="btn text-btn sm-btn" style="color: var(--primary); font-size: 1.2rem; margin-right: 0.5rem;" title="Reset Timer" onclick="editBoss('${boss.id}', '${boss.name}')">⏱️</button>`;
         }
         if (currentUserPerms.delete_all || currentUserPerms.delete_channel) {
@@ -562,12 +569,26 @@ function updateTimers() {
 
         if (remainingMeta <= 0) {
             isSpawned = true;
+
+            // Auto-init stage to 1 on first spawn
+            if ((boss.stage === undefined || boss.stage === null) && !boss._stageInit && currentMapId) {
+                boss._stageInit = true;
+                updateDoc(doc(db, `maps/${currentMapId}/bosses`, boss.id), { stage: 1 }).catch(console.error);
+            }
+
             const elapsedSeconds = Math.floor(Math.abs(remainingMeta) / 1000);
             const eh = Math.floor(elapsedSeconds / 3600).toString().padStart(2, '0');
             const em = Math.floor((elapsedSeconds % 3600) / 60).toString().padStart(2, '0');
             const es = (elapsedSeconds % 60).toString().padStart(2, '0');
-            sText = `<span style="color: #4ade80;">Stage start!!!</span> <span style="font-size: 0.85rem; margin-left: 0.5rem; background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.3);">Elapsed: ${eh}:${em}:${es}</span>`;
+            const stageNum = boss.stage ?? 1;
+            const stageBadge = `<span style="font-size: 0.85rem; margin-left: 0.5rem; background: rgba(249,115,22,0.15); color: #f97316; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(249,115,22,0.4);">Stage ${stageNum}</span>`;
+            sText = `<span style="color: #4ade80;">Stage start!!!</span> <span style="font-size: 0.85rem; margin-left: 0.5rem; background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.3);">Elapsed: ${eh}:${em}:${es}</span>${stageBadge}`;
+
+            const stageBtn = document.getElementById(`stage-btn-${boss.id}`);
+            if (stageBtn) stageBtn.style.display = 'inline-flex';
         } else {
+            const stageBtn = document.getElementById(`stage-btn-${boss.id}`);
+            if (stageBtn) stageBtn.style.display = 'none';
             const totalSeconds = Math.floor(remainingMeta / 1000);
             const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
             const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
@@ -599,6 +620,33 @@ window.deleteBoss = async (bossId, bossName) => {
     }
 };
 
+let stagingBossId = null;
+
+window.setStage = (bossId, channelName) => {
+    stagingBossId = bossId;
+    ui.stageModalTitle.textContent = `Set Stage — Ch. ${channelName}`;
+    ui.stageInput.value = '';
+    ui.stageModal.classList.add('show');
+};
+
+ui.cancelStage.onclick = () => {
+    ui.stageModal.classList.remove('show');
+    stagingBossId = null;
+};
+
+ui.saveStage.onclick = async () => {
+    const val = parseFloat(ui.stageInput.value);
+    if (isNaN(val) || val < 1 || val > 5) {
+        alert('Stage must be between 1 and 5.');
+        return;
+    }
+    const rounded = Math.round(val * 10) / 10;
+    await updateDoc(doc(db, `maps/${currentMapId}/bosses`, stagingBossId), { stage: rounded });
+    logActivity("Set Stage", `Map [${ui.currentMapTitle.textContent}] Channel stage set to ${rounded}`);
+    ui.stageModal.classList.remove('show');
+    stagingBossId = null;
+};
+
 window.editBoss = (bossId, channelName) => {
     if (!currentUserPerms.create) return;
     editingBossId = bossId;
@@ -606,18 +654,25 @@ window.editBoss = (bossId, channelName) => {
     ui.newBossName.value = channelName;
     ui.newBossName.disabled = true;
     ui.newBossName.parentElement.style.display = 'none';
-    ui.newBossTime.value = '';
+    resetBossModal();
     ui.bossModal.classList.add('show');
 };
 
 // ----------------- MODAL INTERACTIONS -----------------
+const resetBossModal = () => {
+    ui.typeDuration.checked = true;
+    ui.timeInputLabel.textContent = "Duration (HH:MM from now)";
+    ui.newBossTime.placeholder = "E.g. 02:15";
+    ui.newBossTime.value = '';
+};
+
 ui.addBossBtn.onclick = () => {
     editingBossId = null;
     ui.bossModal.querySelector('h3').textContent = "Add New Channel";
     ui.newBossName.disabled = false;
     ui.newBossName.parentElement.style.display = 'flex';
     ui.newBossName.value = '';
-    ui.newBossTime.value = '';
+    resetBossModal();
     ui.bossModal.classList.add('show');
 };
 
@@ -634,9 +689,17 @@ if (ui.donateBtn) {
     ui.closeDonateBtn.onclick = () => ui.donateModal.classList.remove('show');
 }
 
-// Boss Modal
-ui.addBossBtn.onclick = () => ui.bossModal.classList.add('show');
-ui.cancelBoss.onclick = () => { ui.bossModal.classList.remove('show'); ui.newBossName.value = ''; ui.newBossTime.value = ''; };
+ui.cancelBoss.onclick = () => { ui.bossModal.classList.remove('show'); ui.newBossName.value = ''; resetBossModal(); };
+
+ui.stageInput.addEventListener('input', function (e) {
+    if (e.inputType === 'deleteContentBackward') return;
+    let val = this.value.replace(/[^\d.]/g, '');
+    const digits = val.replace(/\./g, '');
+    if (digits.length === 1 && !val.includes('.')) {
+        val = digits + '.';
+    }
+    this.value = val;
+});
 
 // Auto-format time input
 ui.newBossTime.addEventListener('input', function (e) {
@@ -659,6 +722,7 @@ ui.saveBoss.onclick = async () => {
         return;
     }
     const name = ui.newBossName.value.trim();
+
     const timeStr = ui.newBossTime.value.trim();
 
     if (name && timeStr.includes(':') && currentMapId) {
@@ -701,7 +765,8 @@ ui.saveBoss.onclick = async () => {
             await updateDoc(doc(db, `maps/${currentMapId}/bosses`, editingBossId), {
                 targetTime: targetEpoch,
                 hhmmStr: saveHhMmStr,
-                respawnLengthMin: totalMin
+                respawnLengthMin: totalMin,
+                stage: deleteField()
             });
             logActivity("Reset Timer", `Map [${ui.currentMapTitle.textContent}] Channel [${name}] | New Time: ${saveHhMmStr}`);
         } else {
