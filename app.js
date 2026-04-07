@@ -329,6 +329,17 @@ ui.deleteMapBtn.onclick = async () => {
 // Boss Modal
 ui.addBossBtn.onclick = () => ui.bossModal.classList.add('show');
 ui.cancelBoss.onclick = () => { ui.bossModal.classList.remove('show'); ui.newBossName.value = ''; ui.newBossTime.value = ''; };
+
+// Auto-format time input
+ui.newBossTime.addEventListener('input', function(e) {
+    if (e.inputType === 'deleteContentBackward') return;
+    let val = this.value.replace(/[^\d]/g, '');
+    if (val.length >= 2) {
+        val = val.substring(0, 2) + (val.length > 2 ? ':' + val.substring(2, 4) : ':');
+    }
+    this.value = val;
+});
+
 ui.saveBoss.onclick = async () => {
     const name = ui.newBossName.value.trim();
     const timeStr = ui.newBossTime.value.trim();
