@@ -4,7 +4,7 @@ import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, d
 
 // Your Firebase configuration from the screenshot
 const firebaseConfig = {
-  apiKey: "AIzaSyBtOgABQlRCH_9wfTQ7g9Bxhnn336vsKQI", // Feel free to double check this matches exactly!
+  apiKey: "AIzaSyBt0gABQlRCH_9wfTQ7g9Bxhnn336vsKQI",
   authDomain: "tosm-3f264.firebaseapp.com",
   projectId: "tosm-3f264",
   storageBucket: "tosm-3f264.firebasestorage.app",
