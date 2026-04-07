@@ -33,6 +33,40 @@ body {
     justify-content: center;
     background-image: radial-gradient(circle at top right, #1e1b4b, #0f172a 60%);
     background-attachment: fixed;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Animated Ambient Blobs */
+body::before, body::after {
+    content: '';
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(100px);
+    z-index: -1;
+    animation: float 20s infinite alternate ease-in-out;
+}
+body::before {
+    width: 400px;
+    height: 400px;
+    background: rgba(59, 130, 246, 0.15);
+    top: -100px;
+    left: -100px;
+}
+body::after {
+    width: 500px;
+    height: 500px;
+    background: rgba(167, 139, 250, 0.15);
+    bottom: -150px;
+    right: -100px;
+    animation-delay: -5s;
+    animation-direction: alternate-reverse;
+}
+
+@keyframes float {
+    0% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(50px, 100px) scale(1.1); }
+    100% { transform: translate(-50px, -50px) scale(0.9); }
 }
 
 .container {
@@ -48,7 +82,26 @@ body {
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--card-border);
     border-radius: var(--border-radius);
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.card-glass::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(to right, transparent, rgba(255,255,255,0.03), transparent);
+    transform: skewX(-20deg);
+    transition: 0.5s;
+    pointer-events: none;
+}
+
+.card-glass:hover::before {
+    left: 150%;
 }
 
 /* Views Setup */
@@ -292,21 +345,40 @@ body {
 }
 
 .boss-card {
-    background: rgba(15, 23, 42, 0.4);
+    background: rgba(15, 23, 42, 0.5);
     border: 1px solid var(--card-border);
     border-radius: 12px;
     padding: 1rem 1.2rem;
     display: flex;
     flex-direction: row;
-    align-items: center;
     justify-content: space-between;
-    gap: 1.5rem;
+    align-items: center;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.boss-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--primary);
+    opacity: 0;
     transition: var(--transition);
 }
 
 .boss-card:hover {
-    border-color: rgba(255,255,255,0.2);
-    transform: translateX(4px);
+    background: rgba(30, 41, 59, 0.8);
+    border-color: rgba(59, 130, 246, 0.5);
+    transform: translateX(6px);
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.1);
+}
+
+.boss-card:hover::before {
+    opacity: 1;
 }
 
 .boss-info { flex: 1; }
