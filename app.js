@@ -158,7 +158,7 @@ function loadBosses(mapId) {
         renderBossCards();
         // start UI timer update loop
         if(updateInterval) clearInterval(updateInterval);
-        updateInterval = setInterval(renderBossCards, 1000); 
+        updateInterval = setInterval(updateTimers, 1000); 
     });
 }
 
@@ -169,7 +169,6 @@ function renderBossCards() {
     }
 
     ui.bossList.innerHTML = '';
-    const now = Date.now();
 
     // Sort: closest respawn first, unkilled at the bottom
     globalBossesData.sort((a, b) => {
@@ -180,24 +179,56 @@ function renderBossCards() {
     });
 
     globalBossesData.forEach(boss => {
+        const card = document.createElement('div');
+        card.className = 'boss-card';
+        card.id = `boss-card-${boss.id}`;
+        
+        const rH = Math.floor(boss.respawnLengthMin / 60).toString().padStart(2, '0');
+        const rM = (boss.respawnLengthMin % 60).toString().padStart(2, '0');
+
+        card.innerHTML = `
+            <div class="boss-info">
+                <h4>Channel ${boss.name}</h4>
+                <p>Respawn rule: ${rH}h ${rM}m</p>
+                <p class="spawn-time-text" style="color: var(--primary); font-weight: bold; margin-top: 4px;"></p>
+            </div>
+            <div class="timer-display"></div>
+            <div class="boss-actions">
+                <button class="btn primary-btn sm-btn" onclick="killBoss('${boss.id}', ${boss.respawnLengthMin})" style="white-space: nowrap; padding: 0.6rem 1.4rem;">Die</button>
+                <button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}')" style="color: var(--danger)" title="Remove Channel">X</button>
+            </div>
+        `;
+        ui.bossList.appendChild(card);
+    });
+
+    updateTimers();
+}
+
+function updateTimers() {
+    const now = Date.now();
+    globalBossesData.forEach(boss => {
+        const card = document.getElementById(`boss-card-${boss.id}`);
+        if(!card) return;
+
+        const timerDisplay = card.querySelector('.timer-display');
+        const spawnText = card.querySelector('.spawn-time-text');
+
         let timerText = "00:00:00";
         let isSpawned = false;
-        let spawnTimeText = "Waiting for kill...";
+        let sText = "Waiting for kill...";
 
         if (boss.targetTime) {
-            // Calculate the absolute clock time of respawn
             const spawnDate = new Date(boss.targetTime);
             const sH = spawnDate.getHours().toString().padStart(2, '0');
             const sM = spawnDate.getMinutes().toString().padStart(2, '0');
-            spawnTimeText = `Spawns at: ${sH}:${sM}`;
+            sText = `Spawns at: ${sH}:${sM}`;
 
             const remainingMeta = boss.targetTime - now;
             if (remainingMeta <= 0) {
                 isSpawned = true;
                 timerText = "SPAWNED!";
-                spawnTimeText = "Spawned!";
+                sText = "Spawned!";
             } else {
-                // Calculate hh:mm:ss for countdown
                 const totalSeconds = Math.floor(remainingMeta / 1000);
                 const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
                 const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
@@ -208,25 +239,15 @@ function renderBossCards() {
              timerText = "Waiting...";
         }
 
-        const card = document.createElement('div');
-        card.className = 'boss-card';
+        if(timerDisplay.textContent !== timerText) {
+             timerDisplay.textContent = timerText;
+        }
+        if(spawnText.textContent !== sText) {
+             spawnText.textContent = sText;
+        }
         
-        const rH = Math.floor(boss.respawnLengthMin / 60).toString().padStart(2, '0');
-        const rM = (boss.respawnLengthMin % 60).toString().padStart(2, '0');
-
-        card.innerHTML = `
-            <div class="boss-info">
-                <h4>Channel ${boss.name}</h4>
-                <p>Respawn rule: ${rH}h ${rM}m</p>
-                <p style="color: var(--primary); font-weight: bold; margin-top: 4px;">${spawnTimeText}</p>
-            </div>
-            <div class="timer-display ${isSpawned ? 'spawned' : ''}">${timerText}</div>
-            <div class="boss-actions">
-                <button class="btn primary-btn sm-btn" onclick="killBoss('${boss.id}', ${boss.respawnLengthMin})">I Killed It</button>
-                <button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}')" style="color: var(--danger)" title="Remove Channel">X</button>
-            </div>
-        `;
-        ui.bossList.appendChild(card);
+        if(isSpawned) timerDisplay.classList.add('spawned');
+        else timerDisplay.classList.remove('spawned');
     });
 }
 
