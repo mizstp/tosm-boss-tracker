@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 // Your Firebase configuration from the screenshot
@@ -26,10 +26,7 @@ const views = {
 
 const forms = {
     authForm: document.getElementById('auth-form'),
-    email: document.getElementById('email'),
-    password: document.getElementById('password'),
-    loginBtn: document.getElementById('login-btn'),
-    registerBtn: document.getElementById('register-btn'),
+    googleLoginBtn: document.getElementById('google-login-btn'),
     errorMsg: document.getElementById('auth-error'),
     logoutBtn: document.getElementById('logout-btn'),
     userEmail: document.getElementById('user-display-email')
@@ -76,7 +73,6 @@ onAuthStateChanged(auth, (user) => {
         loadMaps(); // Start syncing data from database when logged in
     } else {
         switchView('auth');
-        forms.authForm.reset();
         // Cleanup listeners when logged out
         if(mapsUnsubscribe) mapsUnsubscribe();
         if(bossesUnsubscribe) bossesUnsubscribe();
@@ -84,37 +80,18 @@ onAuthStateChanged(auth, (user) => {
     }
 });
 
-// Login
-forms.authForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const eVal = forms.email.value;
-    const pVal = forms.password.value;
+// Google Login
+const provider = new GoogleAuthProvider();
+forms.googleLoginBtn.addEventListener('click', async () => {
     try {
-        forms.errorMsg.textContent = "Logging in...";
-        forms.loginBtn.disabled = true;
-        await signInWithEmailAndPassword(auth, eVal, pVal);
+        forms.errorMsg.textContent = "Opening Google login...";
+        forms.googleLoginBtn.disabled = true;
+        await signInWithPopup(auth, provider);
         forms.errorMsg.textContent = "";
     } catch (error) {
         forms.errorMsg.textContent = error.message;
     } finally {
-        forms.loginBtn.disabled = false;
-    }
-});
-
-// Register
-forms.registerBtn.addEventListener('click', async () => {
-    const eVal = forms.email.value;
-    const pVal = forms.password.value;
-    if(!eVal || !pVal) {
-        forms.errorMsg.textContent = "Enter email and password to register/login";
-        return;
-    }
-    try {
-        forms.errorMsg.textContent = "Registering...";
-        await createUserWithEmailAndPassword(auth, eVal, pVal);
-        forms.errorMsg.textContent = "";
-    } catch (error) {
-        forms.errorMsg.textContent = error.message;
+        forms.googleLoginBtn.disabled = false;
     }
 });
 
