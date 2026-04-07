@@ -1,28 +1,80 @@
-# Tree of Savior Mobile: Boss Tracker (sv.Giltine)
+# TOSM Boss Respawn Tracker
 
-A real-time, responsive, and secure Web Application designed to track and share Boss respawn times across game channels and maps. Built from the ground up for minimal maintenance, the tracker automatically cleans up expired events and synchronizes data instantaneously across all connected players using Firebase.
+A real-time web app for coordinating boss respawn timers across channels in Tree of Savior Mobile (sv.Giltine). Guild members share a live board — add a channel's respawn time, and everyone sees the countdown update instantly.
+
+---
 
 ## Features
 
-- **Real-Time Data Sync:** Powered by Firebase Firestore, any updates made by a user (adding a map, updating a channel time) instantly reflect on all active clients without needing to refresh.
-- **Automated Memory Management:** The application automatically performs "garbage collection" on its own. Boss channels that are past their expected time window by +2 hours are automatically deleted out of the database by active clients, ensuring no manual cleanup is ever required.
-- **Role-Based Access Control (RBAC):** 
-  - **Super Admins:** Hard-coded super administrators have permanent, un-revocable access.
-  - **Default Users:** New users who authenticate via Google log in with safe default permissions (Create and Delete Channel).
-  - **Custom Roles:** Admins can dynamically create arbitrary role groups in a built-in admin panel with distinct privileges (Admin Menu, Delete Map, Create).
-- **Action Audit Logs:** Every critical action taken by a user is logged with a timestamp into an Admin dashboard, preventing griefing and allowing administrators to revoke permissions of misbehaving members.
-- **Smart Formatting:** The UI intelligently recognizes game patterns (since respawns are under 6 hours) and auto-formats user inputs for quicker rapid-fire entry.
-- **Glassmorphic UI Design:** A beautiful dark-theme layout utilizing ambient animated background blobs, frosted glass containers (`backdrop-filter`), and dynamic hover lighting logic to mimic high-end gaming aesthetic elements.
+- **Real-time sync** — Firestore listeners push updates to all users instantly, no refresh needed
+- **EP & Map navigation** — Browse all 13 Episodes and their maps via tab navigation
+- **Countdown timers** — Enter a duration (e.g. `02:15` from now) or an exact 24-hour clock time (e.g. `14:30`)
+- **Fire indicators** — EP and map tabs show a 🔥 icon when any channel is 5 minutes or less from spawning
+- **Browser notifications** — Opt-in desktop alerts when a boss stage starts
+- **Auto cleanup** — Channels that are 2+ hours past their spawn time are automatically deleted
+- **Role-based access** — Admins control who can create/delete channels
+- **Audit logs** — Every action is logged with the user's email and timestamp
+
+---
 
 ## Tech Stack
 
-- **Frontend Core:** Vanilla HTML5, CSS3, JavaScript (ES6 Modules)
-- **Backend & Database:** Firebase Authentication (Google OAuth), Firebase Cloud Firestore (NoSQL)
-- **Deployment:** GitHub Pages
+| Layer | Technology |
+|---|---|
+| Auth | Firebase Authentication (Google Sign-In) |
+| Database | Cloud Firestore (real-time listeners) |
+| Frontend | Vanilla JS (ES Modules), no framework |
+| Styling | CSS custom properties + Google Fonts (Inter) |
+| Deployment | GitHub Pages |
 
-## Administrator Quick Start
+---
 
-1. To become a Super Admin initially, you must configure the `AdminEmails` array at the top of `app.js` with the email addresses of the owners.
-2. Sign in to the deployed application with that Google Account.
-3. You will see a golden "🛠️ Admin" button appear on the dashboard.
-4. From there, you can define custom Roles, view the Activity Logs of all users, and assign roles to registered emails. 
+## How It Works
+
+```
+EP Tabs (EP 1–13)
+  └── Map Tabs (e.g. "Alemeth Forest")
+        └── Channel Cards (e.g. "Ch.1 — spawns in 01:42:30")
+```
+
+1. Sign in with Google
+2. Select an **Episode** tab (highest EP shown first)
+3. Select a **Map** tab
+4. View live channel countdowns — cards turn red/orange as spawn approaches
+5. Click **Add Channel** to log a new respawn (requires Create permission)
+
+---
+
+## Roles & Permissions
+
+| Permission | What it allows |
+|---|---|
+| `admin` | Access the Admin Control Panel |
+| `create` | Add new channels (boss entries) |
+| `delete_channel` | Delete individual channels |
+| `delete_all` | Delete all channels on a map |
+
+- Hardcoded admin accounts have all permissions automatically
+- Admins can create custom roles and assign them to members via the Admin Panel
+- New users are auto-assigned the default `Users` role on first login
+
+---
+
+## Admin Panel
+
+Accessible via the **🛠️ Admin** button (admins only). Three tabs:
+
+- **Action Logs** — Scrollable audit table: who did what and when; **Clear Logs** button permanently deletes all log entries from Firestore (with confirmation prompt)
+- **Members** — List of all registered users and their current role
+- **Roles** — Create roles with granular permission checkboxes; view/delete existing roles
+
+---
+
+## File Structure
+
+```
+index.html   — UI layout and modals
+app.js       — All app logic (Firebase, auth, Firestore, UI rendering)
+bdata.js     — Auxiliary data (e.g. QR data for donation modal)
+style.css    — Styles and CSS variables
+```

@@ -87,6 +87,7 @@ const ui = {
 
     adminLogsTbody: document.getElementById('admin-logs-tbody'),
     adminMembersTbody: document.getElementById('admin-members-tbody'),
+    clearLogsBtn: document.getElementById('clear-logs-btn'),
 
     newRoleName: document.getElementById('new-role-name'),
     permAdmin: document.getElementById('perm-admin'),
@@ -759,6 +760,14 @@ if (ui.adminBtn) {
     ui.tabLogs.onclick = () => switchAdminTab('logs');
     ui.tabMembers.onclick = () => switchAdminTab('members');
     ui.tabRoles.onclick = () => switchAdminTab('roles');
+
+    // Clear Logs Button
+    ui.clearLogsBtn.onclick = async () => {
+        if (!confirm('Delete all audit logs? This cannot be undone.')) return;
+        const snapshot = await getDocs(collection(db, "auditLogs"));
+        const deletes = snapshot.docs.map(d => deleteDoc(doc(db, "auditLogs", d.id)));
+        await Promise.all(deletes);
+    };
 
     // Save Role Button
     ui.saveRoleBtn.onclick = async () => {

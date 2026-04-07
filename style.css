@@ -233,6 +233,7 @@ body::after {
 .sm-btn {
     padding: 0.4rem 0.8rem;
     font-size: 0.85rem;
+    flex: none;
 }
 
 .icon-btn {
@@ -507,5 +508,20 @@ body::after {
     
     .modal-content {
         padding: 1.5rem 1rem;
+    }
+
+    /* Admin modal responsive */
+    #admin-modal .modal-content {
+        padding: 1.2rem 0.8rem;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .admin-table-wrap {
+        overflow-x: auto;
+    }
+
+    #admin-modal table {
+        min-width: 460px;
     }
 }

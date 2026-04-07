@@ -150,7 +150,11 @@
 
                 <!-- Logs Tab -->
                 <div id="admin-logs-content">
-                    <div style="max-height: 350px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <h4 style="margin: 0; color: var(--primary);">System Audit Logs</h4>
+                        <button id="clear-logs-btn" class="btn danger-btn sm-btn">Clear Logs</button>
+                    </div>
+                    <div class="admin-table-wrap" style="max-height: 350px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px;">
                         <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 0.85rem;">
                             <thead style="position: sticky; top: 0; background: #0f172a;">
                                 <tr style="border-bottom: 1px solid var(--card-border);">
@@ -168,7 +172,7 @@
 
                 <!-- Members Tab -->
                 <div id="admin-members-content" style="display: none;">
-                    <div style="max-height: 350px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                    <div class="admin-table-wrap" style="max-height: 350px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px;">
                         <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 0.85rem;">
                             <thead style="position: sticky; top: 0; background: #0f172a;">
                                 <tr style="border-bottom: 1px solid var(--card-border);">
