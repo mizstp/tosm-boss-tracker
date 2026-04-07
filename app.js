@@ -274,20 +274,20 @@ let notifiedBosses = {};
 let globalMapListeners = {};
 let globalAllBosses = []; // Flat array of all bosses across the game
 
-// Helper to check if a map or EP is "On Fire" (< 10 mins remaining)
+// Helper to check if a map or EP is "On Fire" (5 mins before spawn OR spawned)
 function getFireIconHTML(epKey = null, mapName = null) {
     const now = Date.now();
-    const TEN_MINS = 10 * 60 * 1000;
+    const FIVE_MINS = 5 * 60 * 1000;
 
     let isFire = false;
 
     if (mapName) {
-        // Check specific map
-        isFire = globalAllBosses.some(b => b.mapId === mapName && b.targetTime && (b.targetTime - now) > 0 && (b.targetTime - now) <= TEN_MINS);
+        // Check specific map (within 5 mins of spawning OR already spawned)
+        isFire = globalAllBosses.some(b => b.mapId === mapName && b.targetTime && (b.targetTime - now) <= FIVE_MINS);
     } else if (epKey) {
         // Check all maps in EP
         const epMaps = EP_DATA[epKey] || [];
-        isFire = globalAllBosses.some(b => epMaps.includes(b.mapId) && b.targetTime && (b.targetTime - now) > 0 && (b.targetTime - now) <= TEN_MINS);
+        isFire = globalAllBosses.some(b => epMaps.includes(b.mapId) && b.targetTime && (b.targetTime - now) <= FIVE_MINS);
     }
 
     return isFire ? ' <span style="color: #ef4444; text-shadow: 0 0 5px rgba(239, 68, 68, 0.5);">🔥</span>' : '';
