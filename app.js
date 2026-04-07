@@ -21,6 +21,25 @@ const db = getFirestore(app);
 
 const AdminEmails = ["mizstpz@gmail.com", "flosslnw4@gmail.com"];
 
+const EP_DATA = {
+    13: ["Alemeth Forest", "Barha Forest", "Kalejimas Lounge", "Investigation Room"],
+    12: ["Coastal Fortress", "Altar Road", "Dingofasil District", "Fortress Battlegrounds", "Storage Quarter"],
+    11: ["Laukyme Swamp", "Tyla Monastery", "Bellai Rainforest", "Zeraha", "Seir Rainforest"],
+    10: ["Penitence Route", "Main Building", "Biltis Forest", "Grand Corridor", "Sanctuary"],
+    9: ["Goddess Ancient Garden", "Fedimian", "Fedimian Suburbs", "Lamstis Gorge", "Mage Tower 1F", "Mage Tower 2F", "Mage Tower 3F"],
+    8: ["Baron Allerno", "Aqueduct Bridge Area", "Demon Prison District 1", "Demon Prison District 3", "Demon Prison District 4", "Demon Prison District 5", "Gindari Gorge"],
+    7: ["Rukas Plateau", "King's Plateau", "Zachariel Crossroads", "Mocia Forest", "Royal Mausoleum 1F", "Royal Mausoleum 2F", "Royal Mausoleum 3F"],
+    6: ["Dina Bee Farm", "Vilna Forest", "Uskis Arable Land", "Spring Light Woods", "Gate Route", "Sirdgela Forest", "Kvailas Forest", "Origin Forest"],
+    5: ["Karolis Springs", "Letas Stream", "Delmore Hamlet", "Delmore Manor", "Delmore Outskirts", "Pilgrim Road"],
+    4: ["Veja Ravine", "Vieta Gorge", "Cobalt Forest", "Septyni Glen", "Pelke Shrine Ruins", "Absenta Reservoir", "Tenants Farm"],
+    3: ["Koru Jungle", "Knidos Jungle", "Dadan Jungle", "Novaha Assembly Hall", "Novaha Annex", "Novaha Institute", "Mirkiti Farm"],
+    2: ["Srautas Gorge", "Gele Plateau", "Nefritas Cliff", "Tenet Garden", "Tenet Church B1F", "Tenet Church 1F", "Tenet Church 2F"],
+    1: ["Klaipeda", "Siauliai W. Forest", "Siauliai E. Forest", "Lemprasa Pond", "Siauliai Miners Village", "Crystal Mine"]
+};
+
+let currentEP = "13";
+let editingBossId = null;
+
 // ----------------- DOM ELEMENTS -----------------
 const views = {
     auth: document.getElementById('auth-view'),
@@ -36,16 +55,11 @@ const forms = {
 };
 
 const ui = {
+    epTabs: document.getElementById('ep-tabs'),
     mapTabs: document.getElementById('map-tabs'),
-    addTabBtn: document.getElementById('add-tab-btn'),
-    mapModal: document.getElementById('map-modal'),
-    newMapName: document.getElementById('new-map-name'),
-    cancelMap: document.getElementById('cancel-map-btn'),
-    saveMap: document.getElementById('save-map-btn'),
     
     currentMapTitle: document.getElementById('current-map-title'),
     addBossBtn: document.getElementById('add-boss-btn'),
-    deleteMapBtn: document.getElementById('delete-map-btn'),
     bossList: document.getElementById('boss-list'),
     
     bossModal: document.getElementById('boss-modal'),
@@ -189,7 +203,6 @@ onAuthStateChanged(auth, async (user) => {
 
         // Apply visual access right away
         ui.adminBtn.style.display = currentUserPerms.admin ? 'block' : 'none';
-        ui.addTabBtn.style.display = currentUserPerms.create ? 'flex' : 'none';
 
         switchView('dashboard');
         forms.userEmail.textContent = user.email;
@@ -225,48 +238,63 @@ forms.logoutBtn.addEventListener('click', () => {
 
 // ----------------- MAPS LOGIC -----------------
 function loadMaps() {
-    const q = query(collection(db, "maps"));
-    mapsUnsubscribe = onSnapshot(q, (snapshot) => {
-        ui.mapTabs.innerHTML = '';
-        const maps = [];
-        snapshot.forEach(doc => {
-            maps.push({ id: doc.id, ...doc.data() });
-        });
-
-        maps.sort((a,b) => a.name.localeCompare(b.name)); // Sort Alphabetically
-
-        maps.forEach(map => {
-            const btn = document.createElement('div');
-            btn.className = `tab ${currentMapId === map.id ? 'active-tab' : ''}`;
-            btn.textContent = map.name;
-            btn.onclick = () => selectMap(map.id, map.name);
-            ui.mapTabs.appendChild(btn);
-        });
-
-        if(maps.length > 0 && !currentMapId) {
-            selectMap(maps[0].id, maps[0].name);
-        } else if (maps.length === 0) {
-            ui.currentMapTitle.textContent = "No Maps Added Yet";
-            ui.addBossBtn.style.display = 'none';
-        }
+    ui.epTabs.innerHTML = '';
+    const eps = Object.keys(EP_DATA).sort((a,b) => parseInt(b) - parseInt(a)); // Descending EP
+    
+    eps.forEach(ep => {
+        const btn = document.createElement('div');
+        btn.className = `tab ${currentEP === ep ? 'active-tab' : ''}`;
+        btn.textContent = `EP ${ep}`;
+        btn.onclick = () => selectEP(ep);
+        ui.epTabs.appendChild(btn);
     });
+
+    selectEP(eps[0]); // Auto select newest EP
 }
 
-function selectMap(id, name) {
-    currentMapId = id;
+function selectEP(epKey) {
+    currentEP = epKey;
+    // Update EP tabs visually
+    Array.from(ui.epTabs.children).forEach(t => {
+        if(t.textContent === `EP ${epKey}`) t.classList.add('active-tab');
+        else t.classList.remove('active-tab');
+    });
+
+    // Render maps for this EP
+    ui.mapTabs.innerHTML = '';
+    const maps = EP_DATA[epKey];
+    if(maps && maps.length > 0) {
+        maps.forEach(mapName => {
+            const btn = document.createElement('div');
+            btn.className = `tab`;
+            btn.textContent = mapName;
+            btn.onclick = () => selectMap(mapName);
+            ui.mapTabs.appendChild(btn);
+        });
+        selectMap(maps[0]);
+    } else {
+        ui.mapTabs.innerHTML = '<div class="empty-state" style="padding:0; margin:0; font-size: 0.85rem;">No maps here yet</div>';
+        currentMapId = null;
+        ui.currentMapTitle.textContent = "Select a Map";
+        ui.addBossBtn.style.display = 'none';
+        ui.bossList.innerHTML = '<div class="empty-state">No map selected.</div>';
+    }
+}
+
+function selectMap(name) {
+    // We use the full Map Name directly as the currentMapId!
+    currentMapId = name;
     ui.currentMapTitle.textContent = name;
     
     // UI perms apply
     ui.addBossBtn.style.display = currentUserPerms.create ? 'block' : 'none';
-    ui.deleteMapBtn.style.display = currentUserPerms.delete_all ? 'block' : 'none';
     
     // update tab UI
-    document.querySelectorAll('.tab').forEach(t => {
+    Array.from(ui.mapTabs.children).forEach(t => {
         if(t.textContent === name) t.classList.add('active-tab');
         else t.classList.remove('active-tab');
     });
-
-    loadBosses(id);
+    loadBosses(name);
 }
 
 // ----------------- BOSS LOGIC -----------------
@@ -348,11 +376,18 @@ function renderBossCards() {
             </div>
         `;
         
-        if(currentUserPerms.delete_all || currentUserPerms.delete_channel) {
-            const delDiv = document.createElement('div');
-            delDiv.className = 'boss-actions';
-            delDiv.innerHTML = `<button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}', '${boss.name}')" style="color: var(--danger); font-size: 1.2rem; font-weight: bold;" title="Remove Channel">X</button>`;
-            card.appendChild(delDiv);
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'boss-actions';
+        let actHtml = '';
+        if (currentUserPerms.create) {
+             actHtml += `<button class="btn text-btn sm-btn" style="color: var(--primary); font-size: 1.2rem; margin-right: 0.5rem;" title="Reset Timer" onclick="editBoss('${boss.id}', '${boss.name}')">⏱️</button>`;
+        }
+        if (currentUserPerms.delete_all || currentUserPerms.delete_channel) {
+             actHtml += `<button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}', '${boss.name}')" style="color: var(--danger); font-size: 1.2rem; font-weight: bold;" title="Remove Channel">X</button>`;
+        }
+        if (actHtml) {
+             actionsDiv.innerHTML = actHtml;
+             card.appendChild(actionsDiv);
         }
 
         ui.bossList.appendChild(card);
@@ -406,26 +441,24 @@ function updateTimers() {
         const remainingMeta = targetEpoch - now;
         if (remainingMeta <= 0) {
             isSpawned = true;
-            sText = "Stage start!!!";
+            const elapsedSeconds = Math.floor(Math.abs(remainingMeta) / 1000);
+            const eh = Math.floor(elapsedSeconds / 3600).toString().padStart(2, '0');
+            const em = Math.floor((elapsedSeconds % 3600) / 60).toString().padStart(2, '0');
+            const es = (elapsedSeconds % 60).toString().padStart(2, '0');
+            sText = `<span style="color: #4ade80;">Stage start!!!</span> <span style="font-size: 0.85rem; margin-left: 0.5rem; background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.3);">Elapsed: ${eh}:${em}:${es}</span>`;
         } else {
             const totalSeconds = Math.floor(remainingMeta / 1000);
             const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
             const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
             const s = (totalSeconds % 60).toString().padStart(2, '0');
-            sText = `Waiting in... ${h}:${m}:${s}`;
+            sText = `<span style="color: var(--text-muted);">Waiting in...</span> <span style="color: var(--primary); margin-left: 0.25rem;">${h}:${m}:${s}</span>`;
         }
 
         if (ruleText.textContent !== rText) {
              ruleText.textContent = rText;
         }
-        if (spawnText.textContent !== sText) {
-             spawnText.textContent = sText;
-        }
-        
-        if (isSpawned) {
-             spawnText.style.color = '#4ade80';
-        } else {
-             spawnText.style.color = 'var(--primary)';
+        if (spawnText.innerHTML !== sText) {
+             spawnText.innerHTML = sText;
         }
     });
 }
@@ -442,42 +475,26 @@ window.deleteBoss = async (bossId, bossName) => {
     }
 };
 
-// ----------------- MODAL INTERACTIONS -----------------
-// Maps Modal
-ui.addTabBtn.onclick = () => ui.mapModal.classList.add('show');
-ui.cancelMap.onclick = () => { ui.mapModal.classList.remove('show'); ui.newMapName.value = ''; };
-ui.saveMap.onclick = async () => {
-    if(!currentUserPerms.create) {
-        alert("You do not have permission to create maps.");
-        return;
-    }
-    const val = ui.newMapName.value.trim();
-    if(val) {
-        await addDoc(collection(db, "maps"), { name: val });
-        logActivity("Create Map", val);
-        ui.mapModal.classList.remove('show');
-        ui.newMapName.value = '';
-    }
+window.editBoss = (bossId, channelName) => {
+    if(!currentUserPerms.create) return;
+    editingBossId = bossId;
+    ui.bossModal.querySelector('h3').textContent = `Reset Respawn: Ch. ${channelName}`;
+    ui.newBossName.value = channelName;
+    ui.newBossName.disabled = true;
+    ui.newBossName.parentElement.style.display = 'none';
+    ui.newBossTime.value = '';
+    ui.bossModal.classList.add('show');
 };
 
-ui.deleteMapBtn.onclick = async () => {
-    if(!currentUserPerms.delete_all) {
-        alert("You do not have permission to delete maps.");
-        return;
-    }
-    if(!currentMapId) return;
-    if(confirm('Are you sure you want to delete this map entirely? All channels inside will be lost.')) {
-        const deletedMapName = ui.currentMapTitle.textContent;
-        // Technically this leaves dangling bosses in Firestore logic unless deleted recursively,
-        // but it removes it from UI, keeping it simple for the free tier for now.
-        await deleteDoc(doc(db, "maps", currentMapId));
-        logActivity("Delete Map", deletedMapName);
-        currentMapId = null;
-        ui.currentMapTitle.textContent = "Select a Map";
-        ui.addBossBtn.style.display = 'none';
-        ui.deleteMapBtn.style.display = 'none';
-        ui.bossList.innerHTML = '<div class="empty-state">No map selected.</div>';
-    }
+// ----------------- MODAL INTERACTIONS -----------------
+ui.addBossBtn.onclick = () => {
+    editingBossId = null;
+    ui.bossModal.querySelector('h3').textContent = "Add New Channel";
+    ui.newBossName.disabled = false;
+    ui.newBossName.parentElement.style.display = 'flex';
+    ui.newBossName.value = '';
+    ui.newBossTime.value = '';
+    ui.bossModal.classList.add('show');
 };
 
 // Donate Modal
@@ -556,14 +573,24 @@ ui.saveBoss.onclick = async () => {
             }
         }
 
-        await addDoc(collection(db, `maps/${currentMapId}/bosses`), {
-            name: name,
-            targetTime: targetEpoch,
-            hhmmStr: saveHhMmStr,
-            respawnLengthMin: totalMin 
-        });
-        logActivity("Add Channel", `Map [${ui.currentMapTitle.textContent}] Channel [${name}] | Time Set: ${saveHhMmStr}`);
+        if (editingBossId) {
+            await updateDoc(doc(db, `maps/${currentMapId}/bosses`, editingBossId), {
+                targetTime: targetEpoch,
+                hhmmStr: saveHhMmStr,
+                respawnLengthMin: totalMin 
+            });
+            logActivity("Reset Timer", `Map [${ui.currentMapTitle.textContent}] Channel [${name}] | New Time: ${saveHhMmStr}`);
+        } else {
+            await addDoc(collection(db, `maps/${currentMapId}/bosses`), {
+                name: name,
+                targetTime: targetEpoch,
+                hhmmStr: saveHhMmStr,
+                respawnLengthMin: totalMin 
+            });
+            logActivity("Add Channel", `Map [${ui.currentMapTitle.textContent}] Channel [${name}] | Time Set: ${saveHhMmStr}`);
+        }
         ui.bossModal.classList.remove('show');
+        editingBossId = null;
         ui.newBossName.value = '';
         ui.newBossTime.value = '';
     } else {

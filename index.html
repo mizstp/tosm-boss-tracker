@@ -60,20 +60,19 @@
                 </div>
             </header>
 
-            <div class="tabs-container card-glass">
-                <div class="tabs-scroll" id="map-tabs">
-                    <!-- Tabs go here -->
+            <div class="tabs-container card-glass" style="flex-direction: column; align-items: stretch; gap: 0; padding: 0;">
+                <div class="tabs-scroll" id="ep-tabs" style="border-bottom: 1px solid var(--card-border); padding: 0.8rem 1rem;">
+                    <!-- EP Tabs go here -->
                 </div>
-                <button id="add-tab-btn" class="btn icon-btn" title="Add Map Tab">+</button>
+                <div class="tabs-scroll" id="map-tabs" style="padding: 0.8rem 1rem; background: rgba(0,0,0,0.2);">
+                    <div class="empty-state" style="padding:0; margin:0; font-size: 0.85rem;">Select an EP above</div>
+                </div>
             </div>
 
             <div class="boss-board card-glass">
                 <div class="board-header">
                     <h3 id="current-map-title">Select a Map</h3>
                     <div style="display: flex; gap: 0.5rem;" id="board-actions">
-                        <button id="delete-map-btn" class="btn outline-btn sm-btn"
-                            style="display: none; border-color: var(--danger); color: var(--danger);">Delete
-                            Map</button>
                         <button id="add-boss-btn" class="btn primary-btn sm-btn" style="display: none;">Add
                             Channel</button>
                     </div>
@@ -86,17 +85,6 @@
             </div>
         </main>
 
-        <!-- New Map Modal -->
-        <div id="map-modal" class="modal">
-            <div class="modal-content card-glass">
-                <h3>Add New Map</h3>
-                <input type="text" id="new-map-name" placeholder="Map Name (e.g. West Siauliai Woods)">
-                <div class="modal-actions">
-                    <button id="cancel-map-btn" class="btn text-btn">Cancel</button>
-                    <button id="save-map-btn" class="btn primary-btn">Save Map</button>
-                </div>
-            </div>
-        </div>
 
         <!-- New Boss Modal -->
         <div id="boss-modal" class="modal">
