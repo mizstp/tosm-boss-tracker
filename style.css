@@ -721,4 +721,76 @@ body::after {
     #admin-modal table {
         min-width: 460px;
     }
+
+    /* Full-width overrides: revert to mobile-friendly on small screens */
+    #app.full-width {
+        padding: 0;
+    }
+
+    #app.full-width #dashboard-view {
+        min-height: auto;
+    }
+
+    #app.full-width .app-header {
+        border-radius: 0;
+        padding: 1rem;
+        margin: 0;
+    }
+
+    #app.full-width #main-content {
+        flex-direction: column;
+        gap: 0;
+        padding: 0.5rem;
+    }
+
+    /* Sidebar hidden by default on mobile — main content gets full width */
+    #app.full-width #stage-sidebar {
+        position: static;
+        height: auto;
+        max-height: 0;
+        border-radius: var(--border-radius);
+        border: 1px solid var(--card-border);
+        width: 100%;
+        overflow: hidden;
+        padding-top: 0;
+        padding-bottom: 0;
+        opacity: 0;
+        pointer-events: none;
+        margin-bottom: 0;
+        transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+    }
+
+    /* Expanded state when user taps the open button */
+    #app.full-width #stage-sidebar:not(.sidebar-collapsed) {
+        max-height: 200px;
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        opacity: 1;
+        pointer-events: auto;
+        margin-bottom: 0.5rem;
+        overflow-y: auto;
+    }
+
+    #app.full-width #stage-sidebar.sidebar-collapsed {
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    #app.full-width #main-right {
+        padding: 0;
+    }
+
+    /* Open button full-width on mobile */
+    #app.full-width #sidebar-open-btn {
+        position: static;
+        writing-mode: horizontal-tb;
+        width: 100%;
+        border-radius: 8px;
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+        box-shadow: none;
+    }
 }
