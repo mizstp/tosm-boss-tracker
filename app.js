@@ -22,6 +22,8 @@ const db = getFirestore(app);
 const AdminEmails = ["mizstpz@gmail.com", "flosslnw4@gmail.com"];
 
 const EP_DATA = {
+    15: [{id:"Jeromel Square",label:"Jeromel Square(115)"},{id:"Jonael Memorial Dist.",label:"Jonael Memorial Dist.(118)"},{id:"Taniel I Memorial Dist.",label:"Taniel I Memorial Dist.(120)"},{id:"Timerys Temple",label:"Timerys Temple(123)"}],
+    14: [{id:"Neto Mori",label:"Neto Mori(105)"},{id:"Svarfingas Forest",label:"Svarfingas Forest(107)"},{id:"Radal Forest",label:"Radal Forest(109)"},{id:"Tevlin Caves Section 1",label:"Tevlin Caves Section 1(111)"},{id:"Tevlin Caves Section 2",label:"Tevlin Caves Section 2(113)"}],
     13: [{id:"Alemeth Forest",label:"Alemeth Forest(95)"},{id:"Barha Forest",label:"Barha Forest(98)"},{id:"Kalejimas Lounge",label:"Kalejimas Lounge(101)"},{id:"Investigation Room",label:"Investigation Room(103)"}],
     12: [{id:"Coastal Fortress",label:"Coastal Fortress(90)"},{id:"Dingofasil District",label:"Dingofasil District(91)"},{id:"Storage Quarter",label:"Storage Quarter(92)"},{id:"Fortress Battlegrounds",label:"Fortress Battlegrounds(93)"}],
     11: [{id:"Laukyme Swamp",label:"Laukyme Swamp(85)"},{id:"Tyla Monastery",label:"Tyla Monastery(86)"},{id:"Bellai Rainforest",label:"Bellai Rainforest(87)"},{id:"Zeraha",label:"Zeraha(88)"},{id:"Seir Rainforest",label:"Seir Rainforest(89)"}],
@@ -38,12 +40,13 @@ const EP_DATA = {
 };
 
 const EP_GROUPS = {
-    '9-13': [9, 10, 11, 12, 13],
-    '5-8':  [5, 6, 7, 8],
-    '1-4':  [1, 2, 3, 4]
+    '14-15': [14, 15],
+    '9-13':  [9, 10, 11, 12, 13],
+    '5-8':   [5, 6, 7, 8],
+    '1-4':   [1, 2, 3, 4]
 };
-let currentGroup = '9-13';
-let currentEP = "13";
+let currentGroup = '14-15';
+let currentEP = "15";
 let editingBossId = null;
 
 // ----------------- DOM ELEMENTS -----------------
@@ -351,8 +354,11 @@ function updateStagePanel() {
         return;
     }
 
-    // Sort: most recently spawned first
-    spawned.sort((a, b) => b.targetTime - a.targetTime);
+    // Sort: highest stage first, then most recently spawned as tiebreak
+    spawned.sort((a, b) => {
+        const stageDiff = (b.stage ?? 1) - (a.stage ?? 1);
+        return stageDiff !== 0 ? stageDiff : b.targetTime - a.targetTime;
+    });
 
     list.innerHTML = spawned.map(b => {
         let mapLabel = b.mapId;
@@ -367,6 +373,30 @@ function updateStagePanel() {
         </div>`;
     }).join('');
 }
+
+// Sidebar toggle — PC defaults open, mobile defaults closed
+let sidebarOpen = window.innerWidth > 768;
+
+function applysidebar() {
+    const sidebar = document.getElementById('stage-sidebar');
+    const openBtn = document.getElementById('sidebar-open-btn');
+    if (!sidebar || !openBtn) return;
+    if (sidebarOpen) {
+        sidebar.classList.remove('sidebar-collapsed');
+        openBtn.classList.remove('visible');
+    } else {
+        sidebar.classList.add('sidebar-collapsed');
+        openBtn.classList.add('visible');
+    }
+}
+
+window.toggleSidebar = function() {
+    sidebarOpen = !sidebarOpen;
+    applysidebar();
+};
+
+// Apply initial sidebar state (module is deferred so DOM is already ready)
+applysidebar();
 
 window.navigateToMap = function(mapId) {
     const groupEPs = EP_GROUPS[currentGroup] || [];

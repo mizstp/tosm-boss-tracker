@@ -243,11 +243,16 @@
 
     <!-- Stage Start Sidebar (fixed left nav) -->
     <div id="stage-sidebar" class="card-glass">
-        <div class="sidebar-header">Stage Start</div>
+        <div class="sidebar-header">
+            Stage Start
+            <button id="sidebar-close-btn" onclick="toggleSidebar()" title="Hide sidebar">✕</button>
+        </div>
         <div id="stage-sidebar-list">
             <div class="empty-state" style="font-size:0.8rem;">No active stages</div>
         </div>
     </div>
+    <!-- Floating button to re-open sidebar when hidden -->
+    <button id="sidebar-open-btn" onclick="toggleSidebar()" title="Show Stage Start">⚔</button>
 
     <!-- Main Logic -->
     <script type="module" src="app.js"></script>
