@@ -37,6 +37,12 @@ const EP_DATA = {
     1:  [{id:"Siauliai W. Forest",label:"Siauliai W. Forest(1)"},{id:"Siauliai E. Forest",label:"Siauliai E. Forest(3)"},{id:"Lemprasa Pond",label:"Lemprasa Pond(5)"},{id:"Siauliai Miners Village",label:"Siauliai Miners Village(7)"},{id:"Crystal Mine",label:"Crystal Mine(9)"}]
 };
 
+const EP_GROUPS = {
+    '9-13': [9, 10, 11, 12, 13],
+    '5-8':  [5, 6, 7, 8],
+    '1-4':  [1, 2, 3, 4]
+};
+let currentGroup = '9-13';
 let currentEP = "13";
 let editingBossId = null;
 
@@ -55,6 +61,7 @@ const forms = {
 };
 
 const ui = {
+    groupTabs: document.getElementById('group-tabs'),
     epTabs: document.getElementById('ep-tabs'),
     mapTabs: document.getElementById('map-tabs'),
 
@@ -194,7 +201,11 @@ onAuthStateChanged(auth, async (user) => {
 
         switchView('dashboard');
         forms.userEmail.textContent = user.email;
-        if (currentUserPerms.view) loadMaps();
+        if (currentUserPerms.view) {
+            loadGroups();
+            startGlobalListeners(currentGroup);
+            loadMaps();
+        }
     } else {
         switchView('auth');
         // Cleanup listeners when logged out
@@ -279,22 +290,22 @@ function getFireIconHTML(epKey = null, mapName = null) {
     return isFire ? ' <span style="color: #ef4444; text-shadow: 0 0 5px rgba(239, 68, 68, 0.5);">🔥</span>' : '';
 }
 
-// Global listener to track all channels for fire icons
-function startGlobalListeners() {
-    if (Object.keys(globalMapListeners).length > 0) return; // Already started
+// Global listener to track all channels for fire icons (only active group)
+function startGlobalListeners(group) {
+    // Close existing listeners
+    Object.values(globalMapListeners).forEach(unsub => unsub());
+    globalMapListeners = {};
+    globalAllBosses = [];
 
-    Object.keys(EP_DATA).forEach(ep => {
-        EP_DATA[ep].forEach(({id: mapId}) => {
+    const epKeys = EP_GROUPS[group] || [];
+    epKeys.forEach(ep => {
+        (EP_DATA[ep] || []).forEach(({ id: mapId }) => {
             const q = query(collection(db, `maps/${mapId}/bosses`));
             globalMapListeners[mapId] = onSnapshot(q, (snapshot) => {
-                // Remove old bosses for this map
                 globalAllBosses = globalAllBosses.filter(b => b.mapId !== mapId);
-
                 snapshot.forEach(docSnap => {
                     globalAllBosses.push({ id: docSnap.id, mapId: mapId, ...docSnap.data() });
                 });
-
-                // Triggers an update to the Tabs HTML
                 updateTabIcons();
             });
         });
@@ -327,10 +338,31 @@ function updateTabIcons() {
     });
 }
 
+function loadGroups() {
+    ui.groupTabs.innerHTML = '';
+    Object.keys(EP_GROUPS).forEach(g => {
+        const btn = document.createElement('div');
+        btn.className = `tab ${currentGroup === g ? 'active-tab' : ''}`;
+        btn.setAttribute('data-group', g);
+        btn.textContent = `EP ${g}`;
+        btn.onclick = () => selectGroup(g);
+        ui.groupTabs.appendChild(btn);
+    });
+}
+
+function selectGroup(g) {
+    currentGroup = g;
+    Array.from(ui.groupTabs.children).forEach(t => {
+        t.classList.toggle('active-tab', t.getAttribute('data-group') === g);
+    });
+    startGlobalListeners(g);
+    loadMaps();
+}
+
 function loadMaps() {
-    startGlobalListeners();
     ui.epTabs.innerHTML = '';
-    const eps = Object.keys(EP_DATA).sort((a, b) => parseInt(b) - parseInt(a)); // Descending EP
+    const groupEPs = EP_GROUPS[currentGroup] || [];
+    const eps = groupEPs.map(String).sort((a, b) => parseInt(b) - parseInt(a));
 
     eps.forEach(ep => {
         const btn = document.createElement('div');
@@ -341,14 +373,18 @@ function loadMaps() {
         ui.epTabs.appendChild(btn);
     });
 
-    selectEP(eps[0]); // Auto select newest EP
+    if (!groupEPs.includes(parseInt(currentEP))) {
+        selectEP(eps[0]);
+    } else {
+        selectEP(currentEP);
+    }
 }
 
 function selectEP(epKey) {
     currentEP = epKey;
     // Update EP tabs visually
     Array.from(ui.epTabs.children).forEach(t => {
-        if (t.textContent === `EP ${epKey}`) t.classList.add('active-tab');
+        if (t.getAttribute('data-ep') === String(epKey)) t.classList.add('active-tab');
         else t.classList.remove('active-tab');
     });
 
@@ -380,7 +416,13 @@ function selectEP(epKey) {
 function selectMap(name) {
     // We use the full Map Name directly as the currentMapId!
     currentMapId = name;
-    ui.currentMapTitle.textContent = name;
+    // Find display label (with level number) from EP_DATA
+    let mapLabel = name;
+    for (const ep of Object.values(EP_DATA)) {
+        const found = ep.find(m => m.id === name);
+        if (found) { mapLabel = found.label; break; }
+    }
+    ui.currentMapTitle.textContent = mapLabel;
 
     // UI perms apply
     ui.addBossBtn.style.display = currentUserPerms.create ? 'block' : 'none';
