@@ -307,6 +307,7 @@ function startGlobalListeners(group) {
                     globalAllBosses.push({ id: docSnap.id, mapId: mapId, ...docSnap.data() });
                 });
                 updateTabIcons();
+                updateStagePanel();
             });
         });
     });
@@ -337,6 +338,47 @@ function updateTabIcons() {
         }
     });
 }
+
+function updateStagePanel() {
+    const list = document.getElementById('stage-sidebar-list');
+    if (!list) return;
+    const now = Date.now();
+
+    const spawned = globalAllBosses.filter(b => b.targetTime && b.targetTime <= now);
+
+    if (spawned.length === 0) {
+        list.innerHTML = '<div class="empty-state" style="font-size:0.8rem;">No active stages</div>';
+        return;
+    }
+
+    // Sort: most recently spawned first
+    spawned.sort((a, b) => b.targetTime - a.targetTime);
+
+    list.innerHTML = spawned.map(b => {
+        let mapLabel = b.mapId;
+        for (const ep of Object.values(EP_DATA)) {
+            const found = ep.find(m => m.id === b.mapId);
+            if (found) { mapLabel = found.label; break; }
+        }
+        const stage = b.stage ?? 1;
+        return `<div class="sidebar-item" onclick="navigateToMap('${b.mapId.replace(/'/g, "\\'")}')">
+            <div class="sidebar-item-map">${mapLabel}</div>
+            <div class="sidebar-item-meta">Ch.${b.name} &middot; Stage ${stage}</div>
+        </div>`;
+    }).join('');
+}
+
+window.navigateToMap = function(mapId) {
+    const groupEPs = EP_GROUPS[currentGroup] || [];
+    for (const ep of groupEPs) {
+        const found = (EP_DATA[ep] || []).find(m => m.id === mapId);
+        if (found) {
+            selectEP(String(ep));
+            selectMap(mapId);
+            return;
+        }
+    }
+};
 
 function loadGroups() {
     ui.groupTabs.innerHTML = '';
@@ -629,6 +671,7 @@ function updateTimers() {
 
     // Also trigger update for Tabs so Fire Icons appear dynamically
     updateTabIcons();
+    updateStagePanel();
 }
 
 window.deleteBoss = async (bossId, bossName) => {
