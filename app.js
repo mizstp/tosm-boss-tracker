@@ -200,7 +200,8 @@ onAuthStateChanged(auth, async (user) => {
         // Apply visual access
         ui.adminBtn.style.display = currentUserPerms.admin ? 'block' : 'none';
         ui.noAccessPanel.style.display = currentUserPerms.view ? 'none' : 'block';
-        ui.mainContent.style.display = currentUserPerms.view ? 'block' : 'none';
+        ui.mainContent.style.display = currentUserPerms.view ? 'flex' : 'none';
+        document.getElementById('app').classList.add('full-width');
 
         switchView('dashboard');
         forms.userEmail.textContent = user.email;
@@ -211,6 +212,7 @@ onAuthStateChanged(auth, async (user) => {
         }
     } else {
         switchView('auth');
+        document.getElementById('app').classList.remove('full-width');
         // Cleanup listeners when logged out
         if (mapsUnsubscribe) mapsUnsubscribe();
         if (bossesUnsubscribe) bossesUnsubscribe();

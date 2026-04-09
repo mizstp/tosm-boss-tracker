@@ -75,6 +75,48 @@ body::after {
     padding: 2rem 1rem;
 }
 
+/* Full-width dashboard layout */
+#app.full-width {
+    max-width: 100%;
+    padding: 0;
+    width: 100%;
+    align-self: stretch;
+}
+
+#app.full-width #dashboard-view {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+#app.full-width .app-header {
+    border-radius: 0;
+    padding: 0.8rem 1.5rem;
+    margin: 0;
+}
+
+#app.full-width #main-content {
+    flex: 1;
+    gap: 0;
+}
+
+#app.full-width #stage-sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    border-radius: 0;
+    border-top: none;
+    border-bottom: none;
+    border-left: none;
+    padding: 1rem 0.75rem;
+    max-height: 100vh;
+}
+
+#app.full-width #main-right {
+    padding: 1rem 1.5rem;
+    gap: 1rem;
+}
+
 /* Glassmorphism Utilities */
 .card-glass {
     background: var(--card-bg);
