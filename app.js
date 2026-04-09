@@ -40,12 +40,12 @@ const EP_DATA = {
 };
 
 const EP_GROUPS = {
-    '14-15': [14, 15],
-    '9-13':  [9, 10, 11, 12, 13],
+    '13-15': [13, 14, 15],
+    '9-12':  [9, 10, 11, 12],
     '5-8':   [5, 6, 7, 8],
     '1-4':   [1, 2, 3, 4]
 };
-let currentGroup = '14-15';
+let currentGroup = '13-15';
 let currentEP = "15";
 let editingBossId = null;
 

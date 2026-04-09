@@ -629,6 +629,7 @@ body::after {
     /* Stack layout vertically on mobile */
     #main-content {
         flex-direction: column;
+        overflow-x: hidden;
     }
 
     #stage-sidebar {
@@ -741,6 +742,8 @@ body::after {
         flex-direction: column;
         gap: 0;
         padding: 0.5rem;
+        overflow-x: hidden;
+        max-width: 100vw;
     }
 
     /* Sidebar hidden by default on mobile — main content gets full width */
@@ -781,6 +784,8 @@ body::after {
 
     #app.full-width #main-right {
         padding: 0;
+        overflow-x: hidden;
+        max-width: 100%;
     }
 
     /* Open button full-width on mobile */
