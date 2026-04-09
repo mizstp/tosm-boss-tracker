@@ -68,30 +68,42 @@
             </div>
 
             <div id="main-content">
-            <div class="tabs-container card-glass" style="flex-direction: column; align-items: stretch; gap: 0; padding: 0;">
-                <div class="tabs-scroll" id="group-tabs" style="border-bottom: 1px solid var(--card-border); padding: 0.6rem 1rem; background: rgba(0,0,0,0.15);"></div>
-                <div class="tabs-scroll" id="ep-tabs" style="border-bottom: 1px solid var(--card-border); padding: 0.8rem 1rem;">
-                    <!-- EP Tabs go here -->
+            <!-- Left column: Stage Start panel -->
+            <div id="stage-sidebar" class="card-glass">
+                <div class="sidebar-header">
+                    Stage Start
+                    <button id="sidebar-close-btn" onclick="toggleSidebar()" title="Hide">◀</button>
                 </div>
-                <div class="tabs-scroll" id="map-tabs" style="padding: 0.8rem 1rem; background: rgba(0,0,0,0.2);">
-                    <div class="empty-state" style="padding:0; margin:0; font-size: 0.85rem;">Select an EP above</div>
+                <div id="stage-sidebar-list">
+                    <div class="empty-state" style="font-size:0.8rem;">No active stages</div>
                 </div>
             </div>
 
-            <div class="boss-board card-glass">
-                <div class="board-header">
-                    <h3 id="current-map-title">Select a Map</h3>
-                    <div style="display: flex; gap: 0.5rem;" id="board-actions">
-                        <button id="add-boss-btn" class="btn primary-btn sm-btn" style="display: none;">Add
-                            Channel</button>
+            <!-- Right column -->
+            <div id="main-right">
+                <button id="sidebar-open-btn" onclick="toggleSidebar()" title="Show Stage Start">▶</button>
+                <div class="tabs-container card-glass" style="flex-direction: column; align-items: stretch; gap: 0; padding: 0;">
+                    <div class="tabs-scroll" id="group-tabs" style="border-bottom: 1px solid var(--card-border); padding: 0.6rem 1rem; background: rgba(0,0,0,0.15);"></div>
+                    <div class="tabs-scroll" id="ep-tabs" style="border-bottom: 1px solid var(--card-border); padding: 0.8rem 1rem;">
+                        <!-- EP Tabs go here -->
+                    </div>
+                    <div class="tabs-scroll" id="map-tabs" style="padding: 0.8rem 1rem; background: rgba(0,0,0,0.2);">
+                        <div class="empty-state" style="padding:0; margin:0; font-size: 0.85rem;">Select an EP above</div>
                     </div>
                 </div>
 
-                <div class="boss-list" id="boss-list">
-                    <!-- Boss cards will be injected here -->
-                    <div class="empty-state">No map selected or no channels yet.</div>
+                <div class="boss-board card-glass">
+                    <div class="board-header">
+                        <h3 id="current-map-title">Select a Map</h3>
+                        <div style="display: flex; gap: 0.5rem;" id="board-actions">
+                            <button id="add-boss-btn" class="btn primary-btn sm-btn" style="display: none;">Add Channel</button>
+                        </div>
+                    </div>
+                    <div class="boss-list" id="boss-list">
+                        <div class="empty-state">No map selected or no channels yet.</div>
+                    </div>
                 </div>
-            </div>
+            </div> <!-- /main-right -->
             </div> <!-- /main-content -->
         </main>
 
@@ -240,19 +252,6 @@
         </div>
 
     </div>
-
-    <!-- Stage Start Sidebar (fixed left nav) -->
-    <div id="stage-sidebar" class="card-glass">
-        <div class="sidebar-header">
-            Stage Start
-            <button id="sidebar-close-btn" onclick="toggleSidebar()" title="Hide sidebar">✕</button>
-        </div>
-        <div id="stage-sidebar-list">
-            <div class="empty-state" style="font-size:0.8rem;">No active stages</div>
-        </div>
-    </div>
-    <!-- Floating button to re-open sidebar when hidden -->
-    <button id="sidebar-open-btn" onclick="toggleSidebar()" title="Show Stage Start">⚔</button>
 
     <!-- Main Logic -->
     <script type="module" src="app.js"></script>
