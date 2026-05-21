@@ -22,6 +22,7 @@ const db = getFirestore(app);
 const AdminEmails = ["mizstpz@gmail.com", "flosslnw4@gmail.com"];
 
 const EP_DATA = {
+    16: [{id:"ชายฝั่ง Catacombs",label:"ชายฝั่ง Catacombs(125)"},{id:"ชายฝั่ง Aiteo",label:"ชายฝั่ง Aiteo(128)"},{id:"ชายฝั่ง Epherotao",label:"ชายฝั่ง Epherotao(130)"},{id:"พื้นที่ Ranko 22",label:"พื้นที่ Ranko 22(133)"}],
     15: [{id:"Jeromel Square",label:"Jeromel Square(115)"},{id:"Jonael Memorial Dist.",label:"Jonael Memorial Dist.(118)"},{id:"Taniel I Memorial Dist.",label:"Taniel I Memorial Dist.(120)"},{id:"Timerys Temple",label:"Timerys Temple(123)"}],
     14: [{id:"Neto Mori",label:"Neto Mori(105)"},{id:"Svarfingas Forest",label:"Svarfingas Forest(107)"},{id:"Radal Forest",label:"Radal Forest(109)"},{id:"Tevlin Caves Section 1",label:"Tevlin Caves Section 1(111)"},{id:"Tevlin Caves Section 2",label:"Tevlin Caves Section 2(113)"}],
     13: [{id:"Alemeth Forest",label:"Alemeth Forest(95)"},{id:"Barha Forest",label:"Barha Forest(98)"},{id:"Kalejimas Lounge",label:"Kalejimas Lounge(101)"},{id:"Investigation Room",label:"Investigation Room(103)"}],
@@ -40,13 +41,13 @@ const EP_DATA = {
 };
 
 const EP_GROUPS = {
-    '13-15': [13, 14, 15],
+    '13-16': [13, 14, 15, 16],
     '9-12':  [9, 10, 11, 12],
     '5-8':   [5, 6, 7, 8],
     '1-4':   [1, 2, 3, 4]
 };
-let currentGroup = '13-15';
-let currentEP = "15";
+let currentGroup = '13-16';
+let currentEP = "16";
 let editingBossId = null;
 
 // ----------------- DOM ELEMENTS -----------------
