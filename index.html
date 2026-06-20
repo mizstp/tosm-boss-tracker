@@ -5,12 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TOSM Boss Respawn Tracker</title>
+    <link rel="icon" href="pic/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="style.css">
-    <!-- Using Google Fonts for a modern look -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#070b14">
+    <meta name="description" content="A real-time boss respawn and stage tracker for TOSM.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@500;600&family=Fira+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 
 <body>
+    <a class="skip-link" href="#main-right">Skip to tracker</a>
     <div class="background-elements"></div>
 
     <div id="app" class="container">
@@ -18,15 +23,16 @@
         <!-- Authentication View -->
         <main id="auth-view" class="view active card-glass">
             <div class="auth-header">
+                <div class="brand-mark" aria-hidden="true"><span></span></div>
+                <p class="eyebrow">Giltine operations</p>
                 <h1>TOSM Tracker</h1>
-                <p>Boss Respawn Sync</p>
+                <p>Keep every channel, spawn, and stage in sync.</p>
             </div>
 
             <div id="auth-form" class="auth-form">
-                <p id="auth-error" class="error-msg"></p>
-                <div class="auth-actions" style="justify-content: center;">
-                    <button type="button" id="google-login-btn" class="btn outline-btn"
-                        style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; border-color: rgba(255,255,255,0.3); padding: 1rem;">
+                <p id="auth-error" class="error-msg" role="alert" aria-live="polite"></p>
+                <div class="auth-actions">
+                    <button type="button" id="google-login-btn" class="btn google-btn">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"
                             xmlns="http://www.w3.org/2000/svg">
                             <path
@@ -50,19 +56,29 @@
 
         <!-- Main Dashboard View -->
         <main id="dashboard-view" class="view">
-            <header class="app-header card-glass">
-                <h2>Boss Tracker sv.Giltine</h2>
+            <header class="app-header">
+                <div class="app-brand">
+                    <div class="brand-mark" aria-hidden="true"><span></span></div>
+                    <div>
+                        <p class="eyebrow">Giltine server</p>
+                        <h2>Boss Command</h2>
+                    </div>
+                    <span class="live-badge"><span aria-hidden="true"></span> Live</span>
+                </div>
                 <div class="header-actions">
-                    <button id="admin-btn" class="btn danger-btn sm-btn" style="display: none;">🛠️ Admin</button>
-                    <!-- <button id="donate-btn" class="btn donate-btn sm-btn">💖 Support</button> -->
-                    <span id="user-display-email"></span>
-                    <button id="noti-btn" class="btn outline-btn sm-btn" title="Enable boss spawn notifications">🔔 Notis</button>
+                    <button id="admin-btn" class="btn danger-btn sm-btn" style="display: none;">Admin</button>
+                    <!-- <button id="donate-btn" class="btn donate-btn sm-btn">Support</button> -->
+                    <span id="user-display-email" class="user-pill"></span>
+                    <button id="noti-btn" class="btn outline-btn sm-btn" title="Enable boss spawn notifications" aria-label="Enable boss spawn notifications">
+                        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
+                        Alerts
+                    </button>
                     <button id="logout-btn" class="btn outline-btn sm-btn">Logout</button>
                 </div>
             </header>
 
             <div id="no-access-panel" class="card-glass" style="display:none; text-align:center; padding: 3rem 2rem;">
-                <p style="font-size: 2rem; margin-bottom: 1rem;">🔒</p>
+                <div class="access-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
                 <h3 style="margin-bottom: 0.5rem;">No Access</h3>
                 <p style="color: var(--text-muted); font-size: 0.9rem;">You don't have permission to view the tracker.<br>Contact an admin to get access.</p>
             </div>
@@ -71,8 +87,10 @@
             <!-- Left column: Stage Start panel -->
             <div id="stage-sidebar" class="card-glass">
                 <div class="sidebar-header">
-                    Stage Start
-                    <button id="sidebar-close-btn" onclick="toggleSidebar()" title="Hide">◀</button>
+                    <span><i aria-hidden="true"></i> Active stages</span>
+                    <button id="sidebar-close-btn" onclick="toggleSidebar()" title="Hide active stages" aria-label="Hide active stages">
+                        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+                    </button>
                 </div>
                 <div id="stage-sidebar-list">
                     <div class="empty-state" style="font-size:0.8rem;">No active stages</div>
@@ -81,22 +99,47 @@
 
             <!-- Right column -->
             <div id="main-right">
-                <button id="sidebar-open-btn" onclick="toggleSidebar()" title="Show Stage Start">▶</button>
-                <div class="tabs-container card-glass" style="flex-direction: column; align-items: stretch; gap: 0; padding: 0;">
-                    <div class="tabs-scroll" id="group-tabs" style="border-bottom: 1px solid var(--card-border); padding: 0.6rem 1rem; background: rgba(0,0,0,0.15);"></div>
-                    <div class="tabs-scroll" id="ep-tabs" style="border-bottom: 1px solid var(--card-border); padding: 0.8rem 1rem;">
-                        <!-- EP Tabs go here -->
+                <button id="sidebar-open-btn" onclick="toggleSidebar()" title="Show active stages" aria-label="Show active stages">
+                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+                    <span>Active stages</span>
+                </button>
+                <nav class="navigation-panel card-glass" aria-label="Map navigation">
+                    <div class="navigation-header">
+                        <div>
+                            <p class="eyebrow">Hunting ground</p>
+                            <h3>Choose a map</h3>
+                        </div>
+                        <p id="nav-selection-path" class="selection-path" aria-live="polite">EP 17 · Select a map</p>
                     </div>
-                    <div class="tabs-scroll" id="map-tabs" style="padding: 0.8rem 1rem; background: rgba(0,0,0,0.2);">
-                        <div class="empty-state" style="padding:0; margin:0; font-size: 0.85rem;">Select an EP above</div>
+
+                    <div class="navigation-level">
+                        <span class="navigation-label">Range</span>
+                        <div class="tabs-scroll" id="group-tabs" aria-label="Episode range"></div>
                     </div>
-                </div>
+                    <div class="navigation-level">
+                        <span class="navigation-label">Episode</span>
+                        <div class="tabs-scroll" id="ep-tabs" aria-label="Episode">
+                            <!-- EP tabs go here -->
+                        </div>
+                    </div>
+                    <div class="navigation-level map-level">
+                        <span class="navigation-label">Map</span>
+                        <div class="tabs-scroll" id="map-tabs" aria-label="Map">
+                            <div class="navigation-empty">Select an episode above</div>
+                        </div>
+                    </div>
+                </nav>
 
                 <div class="boss-board card-glass">
                     <div class="board-header">
-                        <h3 id="current-map-title">Select a Map</h3>
-                        <div style="display: flex; gap: 0.5rem;" id="board-actions">
-                            <button id="add-boss-btn" class="btn primary-btn sm-btn" style="display: none;">Add Channel</button>
+                        <div class="board-title">
+                            <p class="eyebrow">Live channels</p>
+                            <h3 id="current-map-title">Select a Map</h3>
+                        </div>
+                        <div id="board-actions">
+                            <button id="add-boss-btn" class="btn primary-btn sm-btn" style="display: none;">
+                                <span aria-hidden="true">+</span> Add Channel
+                            </button>
                         </div>
                     </div>
                     <div class="boss-list" id="boss-list">
@@ -110,11 +153,14 @@
 
         <!-- New Boss Modal -->
         <div id="boss-modal" class="modal">
-            <div class="modal-content card-glass">
-                <h3>Add New Channel</h3>
+            <div class="modal-content card-glass" role="dialog" aria-modal="true" aria-labelledby="boss-modal-title">
+                <div class="modal-heading">
+                    <p class="eyebrow">Channel setup</p>
+                    <h3 id="boss-modal-title">Add New Channel</h3>
+                </div>
                 <div class="input-group">
-                    <label>Channel Number</label>
-                    <input type="number" id="new-boss-name" placeholder="E.g. 1">
+                    <label for="new-boss-name">Channel Number <span class="field-hint">Unique per map</span></label>
+                    <input type="number" id="new-boss-name" placeholder="E.g. 1" min="1" step="1" inputmode="numeric">
                 </div>
 
                 <div class="input-group" style="margin-bottom: 0.5rem;">
@@ -132,7 +178,7 @@
                 </div>
 
                 <div class="input-group">
-                    <label id="time-input-label">Duration (HH:MM from now)</label>
+                    <label id="time-input-label" for="new-boss-time">Duration (HH:MM from now)</label>
                     <input type="text" id="new-boss-time" placeholder="E.g. 02:15" maxlength="5">
                 </div>
                 <div class="modal-actions">
@@ -144,10 +190,13 @@
 
         <!-- Set Stage Modal -->
         <div id="stage-modal" class="modal">
-            <div class="modal-content card-glass">
-                <h3 id="stage-modal-title" style="color: #f97316;">Set Stage</h3>
+            <div class="modal-content card-glass" role="dialog" aria-modal="true" aria-labelledby="stage-modal-title">
+                <div class="modal-heading">
+                    <p class="eyebrow">Spawn progression</p>
+                    <h3 id="stage-modal-title">Set Stage</h3>
+                </div>
                 <div class="input-group">
-                    <label>Stage (1 – 5, one decimal allowed)</label>
+                    <label for="stage-input">Stage (1 – 5, one decimal allowed)</label>
                     <input type="text" id="stage-input" placeholder="E.g. 2.4" maxlength="3">
                 </div>
                 <div class="modal-actions">
@@ -160,7 +209,7 @@
         <!-- Donate Modal -->
         <div id="donate-modal" class="modal">
             <div class="modal-content card-glass donate-content">
-                <h3 style="color: #ff7eb3; margin-bottom: 0.5rem;">Support the Developer 💖</h3>
+                <h3 style="color: #ff7eb3; margin-bottom: 0.5rem;">Support the Developer</h3>
                 <p style="color: var(--text-muted); font-size: 0.9rem;">Enjoying the tracker? Consider buying me a
                     coffee!</p>
                 <img src="" alt="Support QR Code" class="donate-qr">

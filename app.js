@@ -47,8 +47,24 @@ const EP_GROUPS = {
     '5-8':   [5, 6, 7, 8],
     '1-4':   [1, 2, 3, 4]
 };
-let currentGroup = '13-17';
-let currentEP = "17";
+
+const NAV_STORAGE_KEY = 'tosm-navigation';
+
+function loadNavigationState() {
+    try {
+        return JSON.parse(localStorage.getItem(NAV_STORAGE_KEY)) || {};
+    } catch (error) {
+        console.warn('Could not restore navigation state:', error);
+        return {};
+    }
+}
+
+const savedNavigation = loadNavigationState();
+let currentGroup = EP_GROUPS[savedNavigation.group] ? savedNavigation.group : '13-17';
+let currentEP = EP_GROUPS[currentGroup].includes(Number(savedNavigation.ep))
+    ? String(savedNavigation.ep)
+    : String(EP_GROUPS[currentGroup][EP_GROUPS[currentGroup].length - 1]);
+let preferredMapId = savedNavigation.mapId || null;
 let editingBossId = null;
 
 // ----------------- DOM ELEMENTS -----------------
@@ -69,6 +85,7 @@ const ui = {
     groupTabs: document.getElementById('group-tabs'),
     epTabs: document.getElementById('ep-tabs'),
     mapTabs: document.getElementById('map-tabs'),
+    navSelectionPath: document.getElementById('nav-selection-path'),
 
     currentMapTitle: document.getElementById('current-map-title'),
     addBossBtn: document.getElementById('add-boss-btn'),
@@ -141,6 +158,11 @@ let mapsUnsubscribe = null;
 let bossesUnsubscribe = null;
 let updateInterval = null;
 let globalBossesData = [];
+let bossLoadGeneration = 0;
+const urlParams = new URLSearchParams(window.location.search);
+const IS_LOCAL_PREVIEW = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+    && urlParams.get('preview') === '1';
+const previewBossesByMap = new Map();
 
 // Permissions state
 let currentUserPerms = { view: false, admin: false, create: false, delete_channel: false, delete_all: false };
@@ -164,8 +186,49 @@ function switchView(viewName) {
     views[viewName].classList.add('active');
 }
 
+function getPreviewBosses(mapId) {
+    if (!previewBossesByMap.has(mapId)) {
+        const now = Date.now();
+        const mapSeed = Array.from(mapId).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+        const channelBase = (mapSeed % 20) + 1;
+        const minuteOffset = (mapSeed % 9) + 1;
+        previewBossesByMap.set(mapId, [
+            { id: `${mapId}-upcoming`, name: String(channelBase), targetTime: now + (70 + minuteOffset) * 60 * 1000, respawnLengthMin: 135 },
+            { id: `${mapId}-soon`, name: String(channelBase + 1), targetTime: now + minuteOffset * 30 * 1000, respawnLengthMin: 135 },
+            { id: `${mapId}-spawned`, name: String(channelBase + 2), targetTime: now - (8 + minuteOffset) * 60 * 1000, respawnLengthMin: 135, stage: 1 + ((mapSeed % 30) / 10) }
+        ]);
+    }
+    return previewBossesByMap.get(mapId);
+}
+
+function refreshPreviewMap() {
+    if (!IS_LOCAL_PREVIEW || !currentMapId) return;
+    globalBossesData = getPreviewBosses(currentMapId);
+    globalAllBosses = globalAllBosses
+        .filter(boss => boss.mapId !== currentMapId)
+        .concat(globalBossesData.map(boss => ({ ...boss, mapId: currentMapId })));
+    renderBossCards();
+}
+
+function initializeLocalPreview() {
+    currentUserPerms = { view: true, admin: false, create: true, delete_channel: true, delete_all: false };
+    ui.adminBtn.style.display = 'none';
+    ui.noAccessPanel.style.display = 'none';
+    ui.mainContent.style.display = 'flex';
+    document.getElementById('app').classList.add('full-width');
+    forms.userEmail.textContent = 'Local preview';
+    forms.logoutBtn.textContent = 'Use Login';
+    switchView('dashboard');
+    loadGroups();
+    startGlobalListeners(currentGroup);
+    loadMaps();
+}
+
 // ----------------- AUTHENTICATION -----------------
-onAuthStateChanged(auth, async (user) => {
+if (IS_LOCAL_PREVIEW) {
+    queueMicrotask(initializeLocalPreview);
+} else {
+    onAuthStateChanged(auth, async (user) => {
     if (user) {
         const uEmail = user.email.toLowerCase();
 
@@ -226,7 +289,8 @@ onAuthStateChanged(auth, async (user) => {
         globalAllBosses = [];
         notifiedBosses = {};
     }
-});
+    });
+}
 
 // Google Login
 const provider = new GoogleAuthProvider();
@@ -245,15 +309,19 @@ forms.googleLoginBtn.addEventListener('click', async () => {
 
 // Logout
 forms.logoutBtn.addEventListener('click', () => {
+    if (IS_LOCAL_PREVIEW) {
+        window.location.search = '';
+        return;
+    }
     signOut(auth);
 });
 
 // ----------------- NOTIFICATIONS -----------------
 if (ui.notiBtn) {
     if (Notification.permission === 'granted') {
-        ui.notiBtn.style.color = '#10b981';
-        ui.notiBtn.style.borderColor = '#10b981';
-        ui.notiBtn.textContent = '🔔 Notis On';
+        ui.notiBtn.classList.add('notifications-enabled');
+        ui.notiBtn.title = 'Boss spawn notifications enabled';
+        ui.notiBtn.setAttribute('aria-label', 'Boss spawn notifications enabled');
     }
     ui.notiBtn.onclick = () => {
         if (Notification.permission === 'granted') {
@@ -262,9 +330,9 @@ if (ui.notiBtn) {
         }
         Notification.requestPermission().then(perm => {
             if (perm === 'granted') {
-                ui.notiBtn.style.color = '#10b981';
-                ui.notiBtn.style.borderColor = '#10b981';
-                ui.notiBtn.textContent = '🔔 Notis On';
+                ui.notiBtn.classList.add('notifications-enabled');
+                ui.notiBtn.title = 'Boss spawn notifications enabled';
+                ui.notiBtn.setAttribute('aria-label', 'Boss spawn notifications enabled');
                 new Notification('TOSM Tracker', { body: 'Notifications enabled successfully!' });
             } else {
                 alert('Notification permission was denied.');
@@ -294,7 +362,7 @@ function getFireIconHTML(epKey = null, mapName = null) {
         isFire = globalAllBosses.some(b => epMaps.some(m => m.id === b.mapId) && b.targetTime && (b.targetTime - now) <= FIVE_MINS);
     }
 
-    return isFire ? ' <span style="color: #ef4444; text-shadow: 0 0 5px rgba(239, 68, 68, 0.5);">🔥</span>' : '';
+    return isFire ? ' <span class="activity-mark" title="Spawn active or due soon" aria-label="Spawn active or due soon"></span>' : '';
 }
 
 // Global listener to track all channels for fire icons (only active group)
@@ -305,6 +373,18 @@ function startGlobalListeners(group) {
     globalAllBosses = [];
 
     const epKeys = EP_GROUPS[group] || [];
+    if (IS_LOCAL_PREVIEW) {
+        const previewMapIds = epKeys
+            .flatMap(ep => (EP_DATA[ep] || []).map(map => map.id))
+            .slice(0, 2);
+        globalAllBosses = previewMapIds.flatMap(mapId => (
+            getPreviewBosses(mapId).map(boss => ({ ...boss, mapId }))
+        ));
+        updateTabIcons();
+        updateStagePanel();
+        return;
+    }
+
     epKeys.forEach(ep => {
         (EP_DATA[ep] || []).forEach(({ id: mapId }) => {
             const q = query(collection(db, `maps/${mapId}/bosses`));
@@ -321,7 +401,7 @@ function startGlobalListeners(group) {
 }
 
 function updateTabIcons() {
-    if (!auth.currentUser || !currentEP) return;
+    if ((!auth.currentUser && !IS_LOCAL_PREVIEW) || !currentEP) return;
 
     // Update EP tabs
     Array.from(ui.epTabs.children).forEach(t => {
@@ -371,10 +451,11 @@ function updateStagePanel() {
             if (found) { mapLabel = found.label; break; }
         }
         const stage = b.stage ?? 1;
-        return `<div class="sidebar-item" onclick="navigateToMap('${b.mapId.replace(/'/g, "\\'")}')">
+        const stageMeta = b.awaitingReset ? 'Awaiting reset' : `Stage ${stage}`;
+        return `<button type="button" class="sidebar-item" onclick="navigateToMap('${b.mapId.replace(/'/g, "\\'")}')">
             <div class="sidebar-item-map">${mapLabel}</div>
-            <div class="sidebar-item-meta">Ch.${b.name} &middot; Stage ${stage}</div>
-        </div>`;
+            <div class="sidebar-item-meta">Ch.${b.name} &middot; ${stageMeta}</div>
+        </button>`;
     }).join('');
 }
 
@@ -388,9 +469,11 @@ function applysidebar() {
     if (sidebarOpen) {
         sidebar.classList.remove('sidebar-collapsed');
         openBtn.classList.remove('visible');
+        openBtn.setAttribute('aria-expanded', 'true');
     } else {
         sidebar.classList.add('sidebar-collapsed');
         openBtn.classList.add('visible');
+        openBtn.setAttribute('aria-expanded', 'false');
     }
 }
 
@@ -417,9 +500,11 @@ window.navigateToMap = function(mapId) {
 function loadGroups() {
     ui.groupTabs.innerHTML = '';
     Object.keys(EP_GROUPS).forEach(g => {
-        const btn = document.createElement('div');
+        const btn = document.createElement('button');
+        btn.type = 'button';
         btn.className = `tab ${currentGroup === g ? 'active-tab' : ''}`;
         btn.setAttribute('data-group', g);
+        btn.setAttribute('aria-pressed', String(currentGroup === g));
         btn.textContent = `EP ${g}`;
         btn.onclick = () => selectGroup(g);
         ui.groupTabs.appendChild(btn);
@@ -429,7 +514,9 @@ function loadGroups() {
 function selectGroup(g) {
     currentGroup = g;
     Array.from(ui.groupTabs.children).forEach(t => {
-        t.classList.toggle('active-tab', t.getAttribute('data-group') === g);
+        const isActive = t.getAttribute('data-group') === g;
+        t.classList.toggle('active-tab', isActive);
+        t.setAttribute('aria-pressed', String(isActive));
     });
     startGlobalListeners(g);
     loadMaps();
@@ -441,9 +528,11 @@ function loadMaps() {
     const eps = groupEPs.map(String).sort((a, b) => parseInt(b) - parseInt(a));
 
     eps.forEach(ep => {
-        const btn = document.createElement('div');
+        const btn = document.createElement('button');
+        btn.type = 'button';
         btn.className = `tab ${currentEP === ep ? 'active-tab' : ''}`;
         btn.setAttribute('data-ep', ep);
+        btn.setAttribute('aria-pressed', String(currentEP === ep));
         btn.innerHTML = `EP ${ep}` + getFireIconHTML(ep, null);
         btn.onclick = () => selectEP(ep);
         ui.epTabs.appendChild(btn);
@@ -460,8 +549,9 @@ function selectEP(epKey) {
     currentEP = epKey;
     // Update EP tabs visually
     Array.from(ui.epTabs.children).forEach(t => {
-        if (t.getAttribute('data-ep') === String(epKey)) t.classList.add('active-tab');
-        else t.classList.remove('active-tab');
+        const isActive = t.getAttribute('data-ep') === String(epKey);
+        t.classList.toggle('active-tab', isActive);
+        t.setAttribute('aria-pressed', String(isActive));
     });
 
     // Render maps for this EP
@@ -471,19 +561,24 @@ function selectEP(epKey) {
         // Sort maps descending by reversing the array so later maps show up first
         const sortedMaps = maps.slice().reverse();
         sortedMaps.forEach(map => {
-            const btn = document.createElement('div');
+            const btn = document.createElement('button');
+            btn.type = 'button';
             btn.className = `tab`;
             btn.setAttribute('data-map', map.id);
             btn.setAttribute('data-map-label', map.label);
+            btn.setAttribute('aria-pressed', 'false');
             btn.innerHTML = map.label + getFireIconHTML(null, map.id);
             btn.onclick = () => selectMap(map.id);
             ui.mapTabs.appendChild(btn);
         });
-        selectMap(sortedMaps[0].id);
+        const preferredMap = sortedMaps.find(map => map.id === preferredMapId);
+        preferredMapId = null;
+        selectMap(preferredMap?.id || sortedMaps[0].id);
     } else {
         ui.mapTabs.innerHTML = '<div class="empty-state" style="padding:0; margin:0; font-size: 0.85rem;">No maps here yet</div>';
         currentMapId = null;
         ui.currentMapTitle.textContent = "Select a Map";
+        ui.navSelectionPath.textContent = `EP ${currentEP} · No maps available`;
         ui.addBossBtn.style.display = 'none';
         ui.bossList.innerHTML = '<div class="empty-state">No map selected.</div>';
     }
@@ -499,25 +594,58 @@ function selectMap(name) {
         if (found) { mapLabel = found.label; break; }
     }
     ui.currentMapTitle.textContent = mapLabel;
+    ui.navSelectionPath.textContent = `EP ${currentEP} · ${mapLabel}`;
 
     // UI perms apply
-    ui.addBossBtn.style.display = currentUserPerms.create ? 'block' : 'none';
+    ui.addBossBtn.style.display = currentUserPerms.create ? 'inline-flex' : 'none';
 
     // update tab UI
     Array.from(ui.mapTabs.children).forEach(t => {
-        if (t.getAttribute('data-map') === name) t.classList.add('active-tab');
-        else t.classList.remove('active-tab');
+        const isActive = t.getAttribute('data-map') === name;
+        t.classList.toggle('active-tab', isActive);
+        t.setAttribute('aria-pressed', String(isActive));
     });
+    try {
+        localStorage.setItem(NAV_STORAGE_KEY, JSON.stringify({
+            group: currentGroup,
+            ep: currentEP,
+            mapId: currentMapId
+        }));
+    } catch (error) {
+        console.warn('Could not save navigation state:', error);
+    }
     loadBosses(name);
 }
 
 // ----------------- BOSS LOGIC -----------------
 function loadBosses(mapId) {
-    if (bossesUnsubscribe) bossesUnsubscribe();
-    if (updateInterval) clearInterval(updateInterval);
+    const loadGeneration = ++bossLoadGeneration;
+
+    if (bossesUnsubscribe) {
+        bossesUnsubscribe();
+        bossesUnsubscribe = null;
+    }
+    if (updateInterval) {
+        clearInterval(updateInterval);
+        updateInterval = null;
+    }
+
+    // Never leave the previous map's channels visible while the next snapshot loads.
+    globalBossesData = [];
+    ui.bossList.innerHTML = '<div class="empty-state loading-state">Loading channels...</div>';
+
+    if (IS_LOCAL_PREVIEW) {
+        globalBossesData = getPreviewBosses(mapId);
+        refreshPreviewMap();
+        updateInterval = setInterval(updateTimers, 1000);
+        return;
+    }
 
     const q = query(collection(db, `maps/${mapId}/bosses`));
     bossesUnsubscribe = onSnapshot(q, (snapshot) => {
+        // Ignore a late response from a map the user has already left.
+        if (currentMapId !== mapId || loadGeneration !== bossLoadGeneration) return;
+
         globalBossesData = [];
         snapshot.forEach(doc => {
             globalBossesData.push({ id: doc.id, ...doc.data() });
@@ -526,7 +654,39 @@ function loadBosses(mapId) {
         // start UI timer update loop
         if (updateInterval) clearInterval(updateInterval);
         updateInterval = setInterval(updateTimers, 1000);
+    }, (error) => {
+        if (currentMapId !== mapId || loadGeneration !== bossLoadGeneration) return;
+        console.error(`Failed to load channels for ${mapId}:`, error);
+        globalBossesData = [];
+        ui.bossList.innerHTML = '<div class="empty-state error-state">Could not load channels. Try selecting the map again.</div>';
     });
+}
+
+function createBossAction(label, title, className, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `boss-action-btn ${className}`;
+    button.textContent = label;
+    button.title = title;
+    button.setAttribute('aria-label', title);
+    button.addEventListener('click', onClick);
+    return button;
+}
+
+function getRespawnRuleText(boss) {
+    if (Number.isFinite(Number(boss.respawnLengthMin)) && Number(boss.respawnLengthMin) >= 0) {
+        const totalMinutes = Number(boss.respawnLengthMin);
+        const hours = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
+        const minutes = Math.floor(totalMinutes % 60).toString().padStart(2, '0');
+        return `Respawn time: ${hours}:${minutes}`;
+    }
+
+    if (boss.hhmmStr) {
+        const [hours = '00', minutes = '00'] = boss.hhmmStr.split(':');
+        return `Respawn time: ${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+    }
+
+    return 'Respawn time: 00:00';
 }
 
 function renderBossCards() {
@@ -569,39 +729,62 @@ function renderBossCards() {
 
     globalBossesData.forEach(boss => {
         const card = document.createElement('div');
-        card.className = 'boss-card';
+        card.className = 'boss-card is-upcoming';
         card.id = `boss-card-${boss.id}`;
 
-        let sH = "00", sM = "00";
-        if (boss.hhmmStr) {
-            const p = boss.hhmmStr.split(':');
-            sH = p[0].padStart(2, '0');
-            sM = p[1].padStart(2, '0');
-        } else if (boss.respawnLengthMin) {
-            sH = Math.floor(boss.respawnLengthMin / 60).toString().padStart(2, '0');
-            sM = (boss.respawnLengthMin % 60).toString().padStart(2, '0');
-        }
-
         card.innerHTML = `
-            <div class="boss-info">
-                <h4>Channel ${boss.name}</h4>
-                <p class="rule-text" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.2rem;">Respawn time: ${sH}:${sM}</p>
-                <p class="spawn-time-text" style="color: var(--primary); font-weight: bold; margin-top: 4px; font-variant-numeric: tabular-nums; font-size: 1.1rem;"></p>
+            <div class="boss-glance">
+                <div class="boss-channel" aria-hidden="true">
+                    <span>CH</span>
+                    <strong class="boss-channel-number"></strong>
+                </div>
+                <div class="boss-timer" aria-live="off">
+                    <div class="timer-meta-row">
+                        <span class="timer-label">Spawns in</span>
+                        <span class="stage-badge" hidden></span>
+                    </div>
+                    <strong class="spawn-time-text">--:--:--</strong>
+                </div>
+                <div class="boss-info">
+                    <div class="boss-title-row">
+                        <h4 class="boss-channel-title"></h4>
+                        <span class="boss-status">Scheduled</span>
+                    </div>
+                    <p class="rule-text">${getRespawnRuleText(boss)}</p>
+                </div>
             </div>
         `;
 
+        card.querySelector('.boss-channel-number').textContent = boss.name;
+        card.querySelector('.boss-channel-title').textContent = `Channel ${boss.name}`;
+
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'boss-actions';
-        let actHtml = '';
         if (currentUserPerms.create) {
-            actHtml += `<button class="btn text-btn sm-btn" id="stage-btn-${boss.id}" style="display:none;" title="Set Stage" onclick="setStage('${boss.id}', '${boss.name}')"><img src="pic/Stage.png" style="width:22px; height:22px; object-fit:contain; vertical-align:middle;"></button>`;
-            actHtml += `<button class="btn text-btn sm-btn" style="color: var(--primary); font-size: 1.2rem; margin-right: 0.5rem;" title="Reset Timer" onclick="editBoss('${boss.id}', '${boss.name}')">⏱️</button>`;
+            const stageButton = createBossAction('Stage', 'Set boss stage', 'stage-action', () => {
+                window.setStage(boss.id, boss.name);
+            });
+            stageButton.id = `stage-btn-${boss.id}`;
+            stageButton.hidden = true;
+            actionsDiv.appendChild(stageButton);
+
+            const defeatedButton = createBossAction('Defeated', 'Mark boss defeated and wait for a new respawn time', 'defeated-action', () => {
+                window.toggleBossDefeated(boss.id, boss.name);
+            });
+            defeatedButton.id = `defeated-btn-${boss.id}`;
+            defeatedButton.hidden = true;
+            actionsDiv.appendChild(defeatedButton);
+
+            actionsDiv.appendChild(createBossAction('Reset', 'Reset channel timer', 'reset-action', () => {
+                window.editBoss(boss.id, boss.name);
+            }));
         }
         if (currentUserPerms.delete_all || currentUserPerms.delete_channel) {
-            actHtml += `<button class="btn text-btn sm-btn" onclick="deleteBoss('${boss.id}', '${boss.name}')" style="color: var(--danger); font-size: 1.2rem; font-weight: bold;" title="Remove Channel">X</button>`;
+            actionsDiv.appendChild(createBossAction('Remove', 'Remove channel', 'remove-action', () => {
+                window.deleteBoss(boss.id, boss.name);
+            }));
         }
-        if (actHtml) {
-            actionsDiv.innerHTML = actHtml;
+        if (actionsDiv.children.length > 0) {
             card.appendChild(actionsDiv);
         }
 
@@ -619,6 +802,9 @@ function updateTimers() {
 
         const ruleText = card.querySelector('.rule-text');
         const spawnText = card.querySelector('.spawn-time-text');
+        const timerLabel = card.querySelector('.timer-label');
+        const statusBadge = card.querySelector('.boss-status');
+        const stageBadge = card.querySelector('.stage-badge');
 
         let sH = "00", sM = "00";
         if (boss.hhmmStr) {
@@ -630,9 +816,8 @@ function updateTimers() {
             sM = (boss.respawnLengthMin % 60).toString().padStart(2, '0');
         }
 
-        let isSpawned = false;
         let sText = "";
-        let rText = `Respawn time: ${sH}:${sM}`;
+        let rText = getRespawnRuleText(boss);
 
         let targetEpoch = boss.targetTime;
         if (!targetEpoch) {
@@ -644,11 +829,49 @@ function updateTimers() {
             targetEpoch = d.getTime();
         }
 
+        const stageBtn = document.getElementById(`stage-btn-${boss.id}`);
+        const defeatedBtn = document.getElementById(`defeated-btn-${boss.id}`);
+
+        if (boss.awaitingReset) {
+            const waitingSince = Number(boss.defeatedAt) || targetEpoch;
+            const waitingSeconds = Math.max(0, Math.floor((now - waitingSince) / 1000));
+            const wh = Math.floor(waitingSeconds / 3600).toString().padStart(2, '0');
+            const wm = Math.floor((waitingSeconds % 3600) / 60).toString().padStart(2, '0');
+            const ws = (waitingSeconds % 60).toString().padStart(2, '0');
+            const stageNum = boss.stage ?? 1;
+
+            card.classList.remove('is-upcoming', 'is-soon', 'is-spawned');
+            card.classList.add('is-awaiting-reset');
+            statusBadge.textContent = 'Awaiting reset';
+            timerLabel.textContent = 'Defeated';
+            stageBadge.textContent = `Stage ${stageNum}`;
+            stageBadge.hidden = false;
+            ruleText.textContent = 'Boss defeated · Enter the next respawn when ready';
+            spawnText.textContent = `${wh}:${wm}:${ws}`;
+
+            if (stageBtn) stageBtn.hidden = true;
+            if (defeatedBtn) {
+                defeatedBtn.hidden = false;
+                defeatedBtn.textContent = 'Undo';
+                defeatedBtn.title = 'Undo defeated state';
+                defeatedBtn.setAttribute('aria-label', `Undo defeated state for channel ${boss.name}`);
+            }
+            return;
+        }
+
         const TWO_HOURS = 2 * 60 * 60 * 1000;
         if (now - targetEpoch > TWO_HOURS) {
             if (!boss._deleting && currentMapId) {
                 boss._deleting = true;
-                deleteDoc(doc(db, `maps/${currentMapId}/bosses`, boss.id)).catch(console.error);
+                if (IS_LOCAL_PREVIEW) {
+                    previewBossesByMap.set(
+                        currentMapId,
+                        getPreviewBosses(currentMapId).filter(item => item.id !== boss.id)
+                    );
+                    refreshPreviewMap();
+                } else {
+                    deleteDoc(doc(db, `maps/${currentMapId}/bosses`, boss.id)).catch(console.error);
+                }
             }
             return;
         }
@@ -667,12 +890,14 @@ function updateTimers() {
         }
 
         if (remainingMeta <= 0) {
-            isSpawned = true;
-
             // Auto-init stage to 1 on first spawn
             if ((boss.stage === undefined || boss.stage === null) && !boss._stageInit && currentMapId) {
                 boss._stageInit = true;
-                updateDoc(doc(db, `maps/${currentMapId}/bosses`, boss.id), { stage: 1 }).catch(console.error);
+                if (IS_LOCAL_PREVIEW) {
+                    boss.stage = 1;
+                } else {
+                    updateDoc(doc(db, `maps/${currentMapId}/bosses`, boss.id), { stage: 1 }).catch(console.error);
+                }
             }
 
             const elapsedSeconds = Math.floor(Math.abs(remainingMeta) / 1000);
@@ -680,26 +905,44 @@ function updateTimers() {
             const em = Math.floor((elapsedSeconds % 3600) / 60).toString().padStart(2, '0');
             const es = (elapsedSeconds % 60).toString().padStart(2, '0');
             const stageNum = boss.stage ?? 1;
-            const stageBadge = `<span style="font-size: 0.85rem; margin-left: 0.5rem; background: rgba(249,115,22,0.15); color: #f97316; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(249,115,22,0.4);">Stage ${stageNum}</span>`;
-            sText = `<span style="color: #4ade80;">Stage start!!!</span> <span style="font-size: 0.85rem; margin-left: 0.5rem; background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.3);">Elapsed: ${eh}:${em}:${es}</span>${stageBadge}`;
+            sText = `${eh}:${em}:${es}`;
 
-            const stageBtn = document.getElementById(`stage-btn-${boss.id}`);
-            if (stageBtn) stageBtn.style.display = 'inline-flex';
+            card.classList.remove('is-upcoming', 'is-soon');
+            card.classList.add('is-spawned');
+            statusBadge.textContent = 'Spawned';
+            timerLabel.textContent = 'Elapsed';
+            stageBadge.textContent = `Stage ${stageNum}`;
+            stageBadge.hidden = false;
+
+            if (stageBtn) stageBtn.hidden = false;
+            if (defeatedBtn) {
+                defeatedBtn.hidden = false;
+                defeatedBtn.textContent = 'Defeated';
+                defeatedBtn.title = 'Mark boss defeated and wait for a new respawn time';
+                defeatedBtn.setAttribute('aria-label', `Mark channel ${boss.name} boss defeated`);
+            }
         } else {
-            const stageBtn = document.getElementById(`stage-btn-${boss.id}`);
-            if (stageBtn) stageBtn.style.display = 'none';
+            const isSoon = remainingMeta <= 5 * 60 * 1000;
+            if (stageBtn) stageBtn.hidden = true;
+            if (defeatedBtn) defeatedBtn.hidden = true;
             const totalSeconds = Math.floor(remainingMeta / 1000);
             const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
             const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
             const s = (totalSeconds % 60).toString().padStart(2, '0');
-            sText = `<span style="color: var(--text-muted);">Waiting in...</span> <span style="color: var(--primary); margin-left: 0.25rem;">${h}:${m}:${s}</span>`;
+            sText = `${h}:${m}:${s}`;
+
+            card.classList.remove('is-spawned', 'is-soon', 'is-upcoming');
+            card.classList.add(isSoon ? 'is-soon' : 'is-upcoming');
+            statusBadge.textContent = isSoon ? 'Spawning soon' : 'Scheduled';
+            timerLabel.textContent = 'Spawns in';
+            stageBadge.hidden = true;
         }
 
         if (ruleText.textContent !== rText) {
             ruleText.textContent = rText;
         }
-        if (spawnText.innerHTML !== sText) {
-            spawnText.innerHTML = sText;
+        if (spawnText.textContent !== sText) {
+            spawnText.textContent = sText;
         }
     });
 
@@ -708,6 +951,49 @@ function updateTimers() {
     updateStagePanel();
 }
 
+window.toggleBossDefeated = async (bossId, bossName) => {
+    if (!currentUserPerms.create || !currentMapId) return;
+
+    const mapId = currentMapId;
+    const boss = globalBossesData.find(item => item.id === bossId);
+    if (!boss) return;
+
+    const markDefeated = !boss.awaitingReset;
+    const actionButton = document.getElementById(`defeated-btn-${bossId}`);
+    if (actionButton) {
+        actionButton.disabled = true;
+        actionButton.textContent = 'Saving...';
+    }
+
+    if (IS_LOCAL_PREVIEW) {
+        if (markDefeated) {
+            boss.awaitingReset = true;
+            boss.defeatedAt = Date.now();
+        } else {
+            delete boss.awaitingReset;
+            delete boss.defeatedAt;
+        }
+        refreshPreviewMap();
+        return;
+    }
+
+    try {
+        await updateDoc(doc(db, `maps/${mapId}/bosses`, bossId), {
+            awaitingReset: markDefeated ? true : deleteField(),
+            defeatedAt: markDefeated ? Date.now() : deleteField()
+        });
+        logActivity(
+            markDefeated ? 'Mark Defeated' : 'Undo Defeated',
+            `Map [${ui.currentMapTitle.textContent}] Channel [${bossName}]`
+        );
+    } catch (error) {
+        console.error('Could not update defeated state:', error);
+        alert('Could not update the boss state. Please try again.');
+    } finally {
+        if (actionButton?.isConnected) actionButton.disabled = false;
+    }
+};
+
 window.deleteBoss = async (bossId, bossName) => {
     if (!currentUserPerms.delete_channel && !currentUserPerms.delete_all) {
         alert("You do not have permission to delete channels.");
@@ -715,6 +1001,14 @@ window.deleteBoss = async (bossId, bossName) => {
     }
     if (!currentMapId) return;
     if (confirm('Are you sure you want to remove this channel?')) {
+        if (IS_LOCAL_PREVIEW) {
+            previewBossesByMap.set(
+                currentMapId,
+                getPreviewBosses(currentMapId).filter(boss => boss.id !== bossId)
+            );
+            refreshPreviewMap();
+            return;
+        }
         await deleteDoc(doc(db, `maps/${currentMapId}/bosses`, bossId));
         logActivity("Remove Channel", `Removed channel [${bossName}] from map [${ui.currentMapTitle.textContent}]`);
     }
@@ -741,6 +1035,14 @@ ui.saveStage.onclick = async () => {
         return;
     }
     const rounded = Math.round(val * 10) / 10;
+    if (IS_LOCAL_PREVIEW) {
+        const boss = getPreviewBosses(currentMapId).find(item => item.id === stagingBossId);
+        if (boss) boss.stage = rounded;
+        refreshPreviewMap();
+        ui.stageModal.classList.remove('show');
+        stagingBossId = null;
+        return;
+    }
     await updateDoc(doc(db, `maps/${currentMapId}/bosses`, stagingBossId), { stage: rounded });
     logActivity("Set Stage", `Map [${ui.currentMapTitle.textContent}] Channel stage set to ${rounded}`);
     ui.stageModal.classList.remove('show');
@@ -816,12 +1118,24 @@ ui.newBossTime.addEventListener('input', function (e) {
     this.value = val;
 });
 
+function normalizeChannelNumber(value) {
+    const channelNumber = Number(value);
+    if (!Number.isInteger(channelNumber) || channelNumber < 1) return null;
+    return String(channelNumber);
+}
+
 ui.saveBoss.onclick = async () => {
     if (!currentUserPerms.create) {
         alert("You do not have permission to create channels.");
         return;
     }
-    const name = ui.newBossName.value.trim();
+    const name = normalizeChannelNumber(ui.newBossName.value.trim());
+
+    if (!name) {
+        alert('Channel number must be a positive whole number.');
+        ui.newBossName.focus();
+        return;
+    }
 
     const timeStr = ui.newBossTime.value.trim();
 
@@ -861,17 +1175,69 @@ ui.saveBoss.onclick = async () => {
             }
         }
 
-        if (editingBossId) {
-            await updateDoc(doc(db, `maps/${currentMapId}/bosses`, editingBossId), {
+        const channelDocumentId = `channel-${name}`;
+        let existingChannel = null;
+
+        if (!editingBossId) {
+            existingChannel = globalBossesData.find(boss => normalizeChannelNumber(boss.name) === name) || null;
+
+            // Also check the deterministic document in case another user created it
+            // after this client's latest snapshot.
+            if (!existingChannel && !IS_LOCAL_PREVIEW) {
+                const channelSnapshot = await getDoc(doc(db, `maps/${currentMapId}/bosses`, channelDocumentId));
+                if (channelSnapshot.exists()) {
+                    existingChannel = { id: channelSnapshot.id, ...channelSnapshot.data() };
+                }
+            }
+
+            if (existingChannel) {
+                const shouldReplace = confirm(
+                    `Channel ${name} already exists on this map. Replace its current timer with this new time?`
+                );
+                if (!shouldReplace) return;
+            }
+        }
+
+        const targetBossId = editingBossId || existingChannel?.id || null;
+
+        if (IS_LOCAL_PREVIEW) {
+            if (targetBossId) {
+                const boss = getPreviewBosses(currentMapId).find(item => item.id === targetBossId);
+                if (boss) {
+                    boss.name = name;
+                    boss.targetTime = targetEpoch;
+                    boss.hhmmStr = saveHhMmStr;
+                    boss.respawnLengthMin = totalMin;
+                    delete boss.stage;
+                    delete boss._stageInit;
+                    delete boss.awaitingReset;
+                    delete boss.defeatedAt;
+                }
+            } else {
+                getPreviewBosses(currentMapId).push({
+                    id: channelDocumentId,
+                    name,
+                    targetTime: targetEpoch,
+                    hhmmStr: saveHhMmStr,
+                    respawnLengthMin: totalMin
+                });
+            }
+            refreshPreviewMap();
+        } else if (targetBossId) {
+            await updateDoc(doc(db, `maps/${currentMapId}/bosses`, targetBossId), {
+                name,
                 targetTime: targetEpoch,
                 hhmmStr: saveHhMmStr,
                 respawnLengthMin: totalMin,
-                stage: deleteField()
+                stage: deleteField(),
+                awaitingReset: deleteField(),
+                defeatedAt: deleteField()
             });
-            logActivity("Reset Timer", `Map [${ui.currentMapTitle.textContent}] Channel [${name}] | New Time: ${saveHhMmStr}`);
+            const action = existingChannel ? 'Replace Existing Channel' : 'Reset Timer';
+            logActivity(action, `Map [${ui.currentMapTitle.textContent}] Channel [${name}] | New Time: ${saveHhMmStr}`);
         } else {
-            await addDoc(collection(db, `maps/${currentMapId}/bosses`), {
-                name: name,
+            await setDoc(doc(db, `maps/${currentMapId}/bosses`, channelDocumentId), {
+                name,
                 targetTime: targetEpoch,
                 hhmmStr: saveHhMmStr,
                 respawnLengthMin: totalMin
