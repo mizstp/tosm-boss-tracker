@@ -1420,11 +1420,22 @@ if (ui.adminBtn) {
             btn.insertAdjacentElement('afterend', cancelBtn);
             return;
         }
+        // Remove the cancel button if still present
+        const sibling = btn.nextElementSibling;
+        if (sibling && sibling.textContent === 'Cancel') sibling.remove();
         delete btn.dataset.confirming;
-        btn.textContent = 'Clear Logs';
-        const snapshot = await getDocs(collection(db, "auditLogs"));
-        const deletes = snapshot.docs.map(d => deleteDoc(doc(db, "auditLogs", d.id)));
-        await Promise.all(deletes);
+        btn.disabled = true;
+        btn.textContent = 'Clearing...';
+        try {
+            const snapshot = await getDocs(collection(db, "auditLogs"));
+            await Promise.all(snapshot.docs.map(d => deleteDoc(doc(db, "auditLogs", d.id))));
+        } catch (err) {
+            console.error('Failed to clear logs:', err);
+            alert(`Failed to clear logs: ${err.message}`);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Clear Logs';
+        }
     };
 
     // Save Role Button

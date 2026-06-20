@@ -22,8 +22,9 @@ service cloud.firestore {
     // ---- Audit logs ----
     // Admins can read/delete; any authenticated user can append
     match /auditLogs/{logId} {
-      allow read, delete: if isAdmin();
-      allow create: if isAuthenticated();
+      allow get, list: if isAdmin();
+      allow delete:    if isAdmin();
+      allow create:    if isAuthenticated();
     }
 
     // ---- Roles ----

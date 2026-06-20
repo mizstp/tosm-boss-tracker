@@ -590,7 +590,7 @@ body::after {
 
 .timer-label {
     color: var(--text-muted);
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -1632,7 +1632,7 @@ a:focus-visible {
     --status-color: #d97745;
     padding: 0.18rem 0.5rem;
     font-family: var(--font-stack);
-    font-size: 0.66rem;
+    font-size: 0.76rem;
 }
 
 .boss-glance .boss-info {
@@ -1657,7 +1657,7 @@ a:focus-visible {
 }
 
 .spawn-time-text {
-    font-size: clamp(1.25rem, 2vw, 1.55rem);
+    font-size: clamp(1.1rem, 2vw, 1.4rem);
 }
 
 .boss-action-btn {
