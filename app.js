@@ -1,7 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, getDocs, setDoc, orderBy, limit, deleteField } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-import { qrData } from "./bdata.js";
 
 // Your Firebase configuration from the screenshot
 const firebaseConfig = {
@@ -89,6 +88,11 @@ const ui = {
 
     currentMapTitle: document.getElementById('current-map-title'),
     addBossBtn: document.getElementById('add-boss-btn'),
+    insertChannelBtn: document.getElementById('insert-channel-btn'),
+    insertChannelModal: document.getElementById('insert-channel-modal'),
+    insertChannelInput: document.getElementById('insert-channel-input'),
+    cancelInsertBtn: document.getElementById('cancel-insert-btn'),
+    saveInsertBtn: document.getElementById('save-insert-btn'),
     bossList: document.getElementById('boss-list'),
 
     notiBtn: document.getElementById('noti-btn'),
@@ -598,6 +602,7 @@ function selectMap(name) {
 
     // UI perms apply
     ui.addBossBtn.style.display = currentUserPerms.create ? 'inline-flex' : 'none';
+    ui.insertChannelBtn.style.display = currentUserPerms.create ? 'inline-flex' : 'none';
 
     // update tab UI
     Array.from(ui.mapTabs.children).forEach(t => {
@@ -794,8 +799,31 @@ function renderBossCards() {
     updateTimers();
 }
 
+function checkGlobalNotifications() {
+    if (Notification.permission !== 'granted') return;
+    const now = Date.now();
+    globalAllBosses.forEach(boss => {
+        if (!boss.targetTime) return;
+        const remaining = boss.targetTime - now;
+        if (remaining > 0 || remaining < -120000) return;
+        const key = `${boss.mapId}::${boss.id}`;
+        if (notifiedBosses[key] === boss.targetTime) return;
+        notifiedBosses[key] = boss.targetTime;
+        let mapLabel = boss.mapId;
+        for (const ep of Object.values(EP_DATA)) {
+            const found = ep.find(m => m.id === boss.mapId);
+            if (found) { mapLabel = found.label; break; }
+        }
+        new Notification('TOSM Boss Spawned!', {
+            body: `Channel ${boss.name} in ${mapLabel} has entered Stage Start!!!`,
+            icon: 'favicon.ico'
+        });
+    });
+}
+
 function updateTimers() {
     const now = Date.now();
+    checkGlobalNotifications();
     globalBossesData.forEach(boss => {
         const card = document.getElementById(`boss-card-${boss.id}`);
         if (!card) return;
@@ -878,16 +906,6 @@ function updateTimers() {
 
         const remainingMeta = targetEpoch - now;
 
-        // Notify if it just spawned (within the last 2 minutes, and not already notified for this exact targetTime)
-        if (remainingMeta <= 0 && remainingMeta > -120000) {
-            if (notifiedBosses[boss.id] !== targetEpoch && Notification.permission === 'granted') {
-                new Notification('TOSM Boss Spawned!', {
-                    body: `Channel ${boss.name} in ${currentMapId} has entered Stage Start!!!`,
-                    icon: 'favicon.ico'
-                });
-                notifiedBosses[boss.id] = targetEpoch;
-            }
-        }
 
         if (remainingMeta <= 0) {
             // Auto-init stage to 1 on first spawn
@@ -1014,6 +1032,68 @@ window.deleteBoss = async (bossId, bossName) => {
     }
 };
 
+// ----------------- INSERT CHANNEL (SHIFT) -----------------
+async function shiftChannels(insertAtNum) {
+    if (!currentMapId || !currentUserPerms.create) return;
+
+    const toShift = globalBossesData
+        .filter(b => Number(b.name) >= insertAtNum)
+        .sort((a, b) => Number(b.name) - Number(a.name)); // descending to avoid collisions
+
+    if (toShift.length === 0) return;
+
+    if (IS_LOCAL_PREVIEW) {
+        toShift.forEach(boss => {
+            const newNum = Number(boss.name) + 1;
+            boss.name = String(newNum);
+            boss.id = `channel-${newNum}`;
+        });
+        refreshPreviewMap();
+        return;
+    }
+
+    for (const boss of toShift) {
+        const newNum = Number(boss.name) + 1;
+        const newDocId = `channel-${newNum}`;
+        const newData = { name: String(newNum) };
+        if (boss.targetTime != null) newData.targetTime = boss.targetTime;
+        if (boss.hhmmStr != null) newData.hhmmStr = boss.hhmmStr;
+        if (boss.respawnLengthMin != null) newData.respawnLengthMin = boss.respawnLengthMin;
+        if (boss.stage != null) newData.stage = boss.stage;
+        if (boss.awaitingReset != null) newData.awaitingReset = boss.awaitingReset;
+        if (boss.defeatedAt != null) newData.defeatedAt = boss.defeatedAt;
+        await setDoc(doc(db, `maps/${currentMapId}/bosses`, newDocId), newData);
+        await deleteDoc(doc(db, `maps/${currentMapId}/bosses`, boss.id));
+    }
+    logActivity("Insert Channel", `Map [${ui.currentMapTitle.textContent}] inserted at Ch.${insertAtNum}, shifted ${toShift.length} channel(s) up`);
+}
+
+ui.insertChannelBtn.onclick = () => {
+    ui.insertChannelInput.value = '';
+    ui.insertChannelModal.classList.add('show');
+    ui.insertChannelInput.focus();
+};
+
+ui.cancelInsertBtn.onclick = () => ui.insertChannelModal.classList.remove('show');
+
+ui.saveInsertBtn.onclick = async () => {
+    const num = parseInt(ui.insertChannelInput.value, 10);
+    if (!Number.isInteger(num) || num < 1) {
+        alert('Enter a valid channel number (positive whole number).');
+        ui.insertChannelInput.focus();
+        return;
+    }
+    ui.saveInsertBtn.disabled = true;
+    ui.saveInsertBtn.textContent = 'Shifting...';
+    try {
+        await shiftChannels(num);
+        ui.insertChannelModal.classList.remove('show');
+    } finally {
+        ui.saveInsertBtn.disabled = false;
+        ui.saveInsertBtn.textContent = 'Shift Channels';
+    }
+};
+
 let stagingBossId = null;
 
 window.setStage = (bossId, channelName) => {
@@ -1080,18 +1160,47 @@ ui.addBossBtn.onclick = () => {
 
 // Donate Modal
 if (ui.donateBtn) {
-    ui.donateBtn.onclick = () => {
+    ui.donateBtn.onclick = async () => {
         ui.donateModal.classList.add('show');
         const img = document.querySelector('.donate-qr');
         if (img && !img.src.includes('data:')) {
-            const b64 = qrData.split('').reverse().join('');
-            img.src = 'data:image/png;base64,' + b64;
+            img.setAttribute('aria-busy', 'true');
+            try {
+                const { qrData } = await import('./bdata.js');
+                const b64 = qrData.split('').reverse().join('');
+                img.src = 'data:image/png;base64,' + b64;
+            } catch (error) {
+                console.error('Unable to load support QR code:', error);
+            } finally {
+                img.removeAttribute('aria-busy');
+            }
         }
     };
     ui.closeDonateBtn.onclick = () => ui.donateModal.classList.remove('show');
 }
 
 ui.cancelBoss.onclick = () => { ui.bossModal.classList.remove('show'); ui.newBossName.value = ''; resetBossModal(); };
+
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (ui.insertChannelModal.classList.contains('show')) {
+        ui.insertChannelModal.classList.remove('show');
+    } else if (ui.adminModal.classList.contains('show')) {
+        ui.adminModal.classList.remove('show');
+        if (adminLogsUnsubscribe) adminLogsUnsubscribe();
+        if (adminMembersUnsubscribe) adminMembersUnsubscribe();
+        if (adminRolesUnsubscribe) adminRolesUnsubscribe();
+    } else if (ui.stageModal.classList.contains('show')) {
+        ui.stageModal.classList.remove('show');
+        stagingBossId = null;
+    } else if (ui.bossModal.classList.contains('show')) {
+        ui.bossModal.classList.remove('show');
+        ui.newBossName.value = '';
+        resetBossModal();
+    } else if (ui.donateModal && ui.donateModal.classList.contains('show')) {
+        ui.donateModal.classList.remove('show');
+    }
+});
 
 ui.stageInput.addEventListener('input', function (e) {
     if (e.inputType === 'deleteContentBackward') return;
@@ -1294,7 +1403,25 @@ if (ui.adminBtn) {
 
     // Clear Logs Button
     ui.clearLogsBtn.onclick = async () => {
-        if (!confirm('Delete all audit logs? This cannot be undone.')) return;
+        const btn = ui.clearLogsBtn;
+        if (!btn.dataset.confirming) {
+            btn.dataset.confirming = '1';
+            btn.textContent = 'Confirm clear?';
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'btn text-btn sm-btn';
+            cancelBtn.style.marginLeft = '6px';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                delete btn.dataset.confirming;
+                btn.textContent = 'Clear Logs';
+                cancelBtn.remove();
+            });
+            btn.insertAdjacentElement('afterend', cancelBtn);
+            return;
+        }
+        delete btn.dataset.confirming;
+        btn.textContent = 'Clear Logs';
         const snapshot = await getDocs(collection(db, "auditLogs"));
         const deletes = snapshot.docs.map(d => deleteDoc(doc(db, "auditLogs", d.id)));
         await Promise.all(deletes);
@@ -1346,13 +1473,26 @@ function loadAdminRoles() {
             li.style.display = "flex";
             li.style.justifyContent = "space-between";
             li.style.alignItems = "center";
-            li.innerHTML = `
-                <div>
-                   <strong style="color:var(--primary);">${r.name}</strong><br>
-                   <span style="color:var(--text-muted); font-size: 0.75rem;">${permsText.join(', ') || 'No Permissions'}</span>
-                </div>
-                <button class="btn text-btn sm-btn" style="color: var(--danger); padding:0;" onclick="deleteRole('${r.id}')">Delete</button>
-             `;
+            const infoDiv = document.createElement('div');
+            const strong = document.createElement('strong');
+            strong.style.color = 'var(--primary)';
+            strong.textContent = r.name;
+            const permSpan = document.createElement('span');
+            permSpan.style.color = 'var(--text-muted)';
+            permSpan.style.fontSize = '0.75rem';
+            permSpan.textContent = permsText.join(', ') || 'No Permissions';
+            infoDiv.appendChild(strong);
+            infoDiv.appendChild(document.createElement('br'));
+            infoDiv.appendChild(permSpan);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'btn text-btn sm-btn';
+            deleteBtn.style.cssText = 'color: var(--danger); padding:0;';
+            deleteBtn.textContent = 'Delete';
+            deleteBtn.addEventListener('click', () => window.deleteRole(r.id, deleteBtn));
+
+            li.appendChild(infoDiv);
+            li.appendChild(deleteBtn);
             ui.rolesList.appendChild(li);
         });
         loadAdminMembers(); // Once roles are loaded, render Members (so dropdown selects have roles)
@@ -1373,11 +1513,26 @@ function loadAdminLogs() {
             const timeStr = d.timestamp ? new Date(d.timestamp.toMillis()).toLocaleString() : "Now";
             const tr = document.createElement('tr');
             tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
-            tr.innerHTML = `
-                <td style="padding: 0.5rem; color:var(--text-main);">${d.userEmail || 'Unknown'}</td>
-                <td style="padding: 0.5rem; color:var(--text-muted);">${d.action} <span style="font-size:0.75rem">(${d.details})</span></td>
-                <td style="padding: 0.5rem; color:var(--text-muted); font-size:0.75rem;">${timeStr}</td>
-             `;
+
+            const tdUser = document.createElement('td');
+            tdUser.style.cssText = 'padding: 0.5rem; color:var(--text-main);';
+            tdUser.textContent = d.userEmail || 'Unknown';
+
+            const tdAction = document.createElement('td');
+            tdAction.style.cssText = 'padding: 0.5rem; color:var(--text-muted);';
+            tdAction.textContent = d.action + ' ';
+            const detailSpan = document.createElement('span');
+            detailSpan.style.fontSize = '0.75rem';
+            detailSpan.textContent = `(${d.details})`;
+            tdAction.appendChild(detailSpan);
+
+            const tdTime = document.createElement('td');
+            tdTime.style.cssText = 'padding: 0.5rem; color:var(--text-muted); font-size:0.75rem;';
+            tdTime.textContent = timeStr;
+
+            tr.appendChild(tdUser);
+            tr.appendChild(tdAction);
+            tr.appendChild(tdTime);
             ui.adminLogsTbody.appendChild(tr);
         });
     });
@@ -1395,34 +1550,65 @@ function loadAdminMembers() {
         snapshot.forEach(docSnap => {
             const d = docSnap.data();
             const email = docSnap.id;
-            let roleOptionsHTML = `<option value="">-- No Permissions --</option>`;
-            globalRolesList.forEach(r => {
-                const sel = (d.roleId === r.id) ? "selected" : "";
-                roleOptionsHTML += `<option value="${r.id}" ${sel}>${r.name}</option>`;
-            });
 
             const tr = document.createElement('tr');
             tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
 
-            // Superadmin badge override
-            let selectBlock = `<select onchange="updateMemberRole('${email}', this.value)" style="background:rgba(15,23,42,0.8); color:white; padding:0.4rem; border-radius:4px; border:1px solid var(--card-border); max-width: 150px;">${roleOptionsHTML}</select>`;
+            const tdEmail = document.createElement('td');
+            tdEmail.style.cssText = 'padding: 0.8rem; color:var(--text-main); word-break: break-all;';
+            tdEmail.textContent = email;
+
+            const tdRole = document.createElement('td');
+            tdRole.style.padding = '0.8rem';
+
             if (AdminEmails.includes(email)) {
-                selectBlock = `<span style="color:#f59e0b; font-weight:bold;">Super Admin (Locked)</span>`;
+                const badge = document.createElement('span');
+                badge.style.cssText = 'color:#f59e0b; font-weight:bold;';
+                badge.textContent = 'Super Admin (Locked)';
+                tdRole.appendChild(badge);
+            } else {
+                const select = document.createElement('select');
+                select.style.cssText = 'background:rgba(15,23,42,0.8); color:white; padding:0.4rem; border-radius:4px; border:1px solid var(--card-border); max-width: 150px;';
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = '';
+                defaultOpt.textContent = '-- No Permissions --';
+                select.appendChild(defaultOpt);
+                globalRolesList.forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r.id;
+                    opt.textContent = r.name;
+                    opt.selected = d.roleId === r.id;
+                    select.appendChild(opt);
+                });
+                select.addEventListener('change', () => window.updateMemberRole(email, select.value));
+                tdRole.appendChild(select);
             }
 
-            tr.innerHTML = `
-                <td style="padding: 0.8rem; color:var(--text-main); word-break: break-all;">${email}</td>
-                <td style="padding: 0.8rem;">${selectBlock}</td>
-             `;
+            tr.appendChild(tdEmail);
+            tr.appendChild(tdRole);
             ui.adminMembersTbody.appendChild(tr);
         });
     });
 }
 
-window.deleteRole = async (roleId) => {
-    if (confirm("Delete this role entirely? Members assigned to this role will lose their special permissions.")) {
-        await deleteDoc(doc(db, "roles", roleId));
+window.deleteRole = async (roleId, triggerEl) => {
+    if (triggerEl && !triggerEl.dataset.confirming) {
+        triggerEl.dataset.confirming = '1';
+        triggerEl.textContent = 'Sure?';
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn text-btn sm-btn';
+        cancelBtn.style.cssText = 'color:var(--text-muted); padding:0; margin-left:6px;';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            delete triggerEl.dataset.confirming;
+            triggerEl.textContent = 'Delete';
+            cancelBtn.remove();
+        });
+        triggerEl.insertAdjacentElement('afterend', cancelBtn);
+        return;
     }
+    await deleteDoc(doc(db, "roles", roleId));
 };
 
 window.updateMemberRole = async (email, roleId) => {

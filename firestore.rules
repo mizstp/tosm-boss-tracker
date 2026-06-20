@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        request.auth.token.email in ['mizstpz@gmail.com', 'flosslnw4@gmail.com'];
+    }
+
+    // Read the caller's role document and check a named permission field
+    function hasPermission(perm) {
+      let memberData = get(/databases/$(database)/documents/members/$(request.auth.token.email)).data;
+      let roleId = memberData.get('roleId', null);
+      return roleId != null &&
+        get(/databases/$(database)/documents/roles/$(roleId)).data.get(perm, false) == true;
+    }
+
+    // ---- Audit logs ----
+    // Admins can read/delete; any authenticated user can append
+    match /auditLogs/{logId} {
+      allow read, delete: if isAdmin();
+      allow create: if isAuthenticated();
+    }
+
+    // ---- Roles ----
+    // Any authenticated user needs to read roles to resolve their own permissions
+    // Only admins can create, update, or delete roles
+    match /roles/{roleId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // ---- Members ----
+    // Users can read and update their own record (for lastLogin tracking)
+    // but cannot change their own roleId — only admins can assign roles
+    match /members/{email} {
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.token.email == email);
+      allow create: if isAuthenticated() && request.auth.token.email == email
+                    && !('roleId' in request.resource.data);
+      allow update: if isAdmin() ||
+                    (isAuthenticated() && request.auth.token.email == email
+                     && (!('roleId' in request.resource.data)
+                         || request.resource.data.roleId == resource.data.get('roleId', null)));
+      allow delete: if isAdmin();
+    }
+
+    // ---- Boss channels ----
+    // view permission → read; create permission → add/update; delete permissions → remove
+    match /maps/{mapId}/bosses/{bossId} {
+      allow read:   if isAdmin() || (isAuthenticated() && hasPermission('view'));
+      allow create: if isAdmin() || (isAuthenticated() && hasPermission('create'));
+      allow update: if isAdmin() || (isAuthenticated() && hasPermission('create'));
+      allow delete: if isAdmin() ||
+                    (isAuthenticated() && (hasPermission('delChannel') || hasPermission('delAll')));
+    }
+  }
+}

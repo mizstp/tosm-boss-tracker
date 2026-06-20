@@ -137,6 +137,10 @@
                             <h3 id="current-map-title">Select a Map</h3>
                         </div>
                         <div id="board-actions">
+                            <button id="insert-channel-btn" class="btn outline-btn sm-btn" style="display: none;" title="A new channel appeared on this map — shift existing channels up">
+                                <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 10l7-7 7 7"/></svg>
+                                Insert Ch.
+                            </button>
                             <button id="add-boss-btn" class="btn primary-btn sm-btn" style="display: none;">
                                 <span aria-hidden="true">+</span> Add Channel
                             </button>
@@ -206,13 +210,37 @@
             </div>
         </div>
 
+        <!-- Insert Channel Modal -->
+        <div id="insert-channel-modal" class="modal">
+            <div class="modal-content card-glass" role="dialog" aria-modal="true" aria-labelledby="insert-channel-modal-title">
+                <div class="modal-heading">
+                    <p class="eyebrow">Channel management</p>
+                    <h3 id="insert-channel-modal-title">Insert New Channel</h3>
+                </div>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.25rem; line-height: 1.6;">
+                    A new channel appeared on this map. Enter the channel number that was added — all existing channels from that number onwards will shift up by 1.
+                    <br><br>
+                    <strong style="color: var(--text-main);">Example:</strong> Inserting at <strong>3</strong> renames Ch.3→4, Ch.4→5, Ch.5→6, etc.
+                </p>
+                <div class="input-group">
+                    <label for="insert-channel-input">New Channel Number <span class="field-hint">Channels ≥ this will shift up</span></label>
+                    <input type="number" id="insert-channel-input" placeholder="E.g. 3" min="1" step="1" inputmode="numeric">
+                </div>
+                <div class="modal-actions">
+                    <button id="cancel-insert-btn" class="btn text-btn">Cancel</button>
+                    <button id="save-insert-btn" class="btn primary-btn">Shift Channels</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Donate Modal -->
         <div id="donate-modal" class="modal">
             <div class="modal-content card-glass donate-content">
                 <h3 style="color: #ff7eb3; margin-bottom: 0.5rem;">Support the Developer</h3>
                 <p style="color: var(--text-muted); font-size: 0.9rem;">Enjoying the tracker? Consider buying me a
                     coffee!</p>
-                <img src="" alt="Support QR Code" class="donate-qr">
+                <img alt="Support QR Code" class="donate-qr" width="1187" height="1068" loading="lazy"
+                    decoding="async">
                 <div class="modal-actions" style="justify-content: center; margin-top: 1rem;">
                     <button id="close-donate-btn" class="btn primary-btn">Thank You!</button>
                 </div>
