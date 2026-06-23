@@ -887,8 +887,8 @@ function updateTimers() {
             return;
         }
 
-        const TWO_HOURS = 2 * 60 * 60 * 1000;
-        if (now - targetEpoch > TWO_HOURS) {
+        const STALE_THRESHOLD = 12 * 60 * 60 * 1000; // 12h: guards against clock-skew false deletes
+        if (now - targetEpoch > STALE_THRESHOLD) {
             if (!boss._deleting && currentMapId) {
                 boss._deleting = true;
                 if (IS_LOCAL_PREVIEW) {
