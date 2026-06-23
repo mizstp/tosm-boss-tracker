@@ -19,6 +19,14 @@ service cloud.firestore {
         get(/databases/$(database)/documents/roles/$(roleId)).data.get(perm, false) == true;
     }
 
+    // ---- Global settings ----
+    // Authenticated users need to read settings (for force-logout watcher).
+    // Only admins can write.
+    match /settings/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
     // ---- Audit logs ----
     // Admins can read/delete; any authenticated user can append
     match /auditLogs/{logId} {

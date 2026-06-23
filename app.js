@@ -266,6 +266,10 @@ if (IS_LOCAL_PREVIEW) {
         }
         currentUserPerms = perms;
 
+        // Start force-logout watcher before loading the app
+        const signInEpoch = new Date(user.metadata.lastSignInTime).getTime();
+        startSessionWatcher(signInEpoch);
+
         // Apply visual access
         ui.adminBtn.style.display = currentUserPerms.admin ? 'block' : 'none';
         ui.noAccessPanel.style.display = currentUserPerms.view ? 'none' : 'block';
@@ -287,6 +291,7 @@ if (IS_LOCAL_PREVIEW) {
         if (mapsUnsubscribe) mapsUnsubscribe();
         if (bossesUnsubscribe) bossesUnsubscribe();
         if (updateInterval) clearInterval(updateInterval);
+        if (sessionWatcherUnsub) { sessionWatcherUnsub(); sessionWatcherUnsub = null; }
 
         // Cleanup all background listeners
         Object.values(globalMapListeners).forEach(unsub => unsub());
@@ -346,6 +351,23 @@ if (ui.notiBtn) {
     };
 }
 let notifiedBosses = {};
+
+// ----------------- SESSION WATCHER -----------------
+// Listens to settings/global in real-time. If an admin sets forceLogoutSince
+// to a time after this user logged in, sign them out and reload immediately —
+// even if they never refresh the page.
+let sessionWatcherUnsub = null;
+
+function startSessionWatcher(userSignInEpoch) {
+    if (sessionWatcherUnsub) sessionWatcherUnsub();
+    sessionWatcherUnsub = onSnapshot(doc(db, 'settings', 'global'), (snap) => {
+        if (!snap.exists()) return;
+        const ts = snap.data().forceLogoutSince;
+        if (ts && ts.toMillis() > userSignInEpoch) {
+            signOut(auth).then(() => location.reload());
+        }
+    });
+}
 
 // ----------------- SERVER TIME SYNC -----------------
 // Keeps a one-time offset so all timer comparisons use server time, not the
@@ -1497,6 +1519,37 @@ if (ui.adminBtn) {
             btn.textContent = 'Clear Logs';
         }
     };
+
+    // Force Logout All Users Button
+    const forceLogoutBtn = document.getElementById('force-logout-btn');
+    const forceLogoutStatus = document.getElementById('force-logout-status');
+    if (forceLogoutBtn) {
+        forceLogoutBtn.onclick = async () => {
+            if (!forceLogoutBtn.dataset.confirming) {
+                forceLogoutBtn.dataset.confirming = '1';
+                forceLogoutBtn.textContent = 'Confirm? (kicks everyone)';
+                setTimeout(() => {
+                    delete forceLogoutBtn.dataset.confirming;
+                    forceLogoutBtn.textContent = 'Force Logout All Users';
+                }, 5000);
+                return;
+            }
+            delete forceLogoutBtn.dataset.confirming;
+            forceLogoutBtn.disabled = true;
+            forceLogoutBtn.textContent = 'Logging out everyone...';
+            try {
+                await setDoc(doc(db, 'settings', 'global'), {
+                    forceLogoutSince: serverTimestamp()
+                }, { merge: true });
+                forceLogoutStatus.textContent = 'Done — all other sessions will be signed out.';
+            } catch (err) {
+                forceLogoutStatus.textContent = `Failed: ${err.message}`;
+            } finally {
+                forceLogoutBtn.disabled = false;
+                forceLogoutBtn.textContent = 'Force Logout All Users';
+            }
+        };
+    }
 
     // Save Role Button
     ui.saveRoleBtn.onclick = async () => {
