@@ -275,6 +275,7 @@ if (IS_LOCAL_PREVIEW) {
         switchView('dashboard');
         forms.userEmail.textContent = user.email;
         if (currentUserPerms.view) {
+            await syncServerTime();
             loadGroups();
             startGlobalListeners(currentGroup);
             loadMaps();
@@ -346,13 +347,35 @@ if (ui.notiBtn) {
 }
 let notifiedBosses = {};
 
+// ----------------- SERVER TIME SYNC -----------------
+// Keeps a one-time offset so all timer comparisons use server time, not the
+// local clock. This prevents wrong clocks (e.g. jet-lag timezone drift) from
+// triggering false auto-deletes or mis-firing notifications.
+let serverTimeOffset = 0;
+
+async function syncServerTime() {
+    try {
+        const resp = await fetch('https://firestore.googleapis.com/');
+        const dateHeader = resp.headers.get('date');
+        if (dateHeader) {
+            serverTimeOffset = new Date(dateHeader).getTime() - Date.now();
+        }
+    } catch (_) {
+        // silently fall back to local time
+    }
+}
+
+function getServerTime() {
+    return Date.now() + serverTimeOffset;
+}
+
 // ----------------- MAPS LOGIC -----------------
 let globalMapListeners = {};
 let globalAllBosses = []; // Flat array of all bosses across the game
 
 // Helper to check if a map or EP is "On Fire" (5 mins before spawn OR spawned)
 function getFireIconHTML(epKey = null, mapName = null) {
-    const now = Date.now();
+    const now = getServerTime();
     const FIVE_MINS = 5 * 60 * 1000;
 
     let isFire = false;
@@ -433,7 +456,7 @@ function updateTabIcons() {
 function updateStagePanel() {
     const list = document.getElementById('stage-sidebar-list');
     if (!list) return;
-    const now = Date.now();
+    const now = getServerTime();
 
     const spawned = globalAllBosses.filter(b => b.targetTime && b.targetTime <= now);
 
@@ -703,7 +726,7 @@ function renderBossCards() {
     ui.bossList.innerHTML = '';
 
     // pre-compute target times for sorting
-    const nowSort = Date.now();
+    const nowSort = getServerTime();
     globalBossesData.forEach(boss => {
         if (!boss.targetTime) {
             let sH = 0, sM = 0;
@@ -801,7 +824,7 @@ function renderBossCards() {
 
 function checkGlobalNotifications() {
     if (Notification.permission !== 'granted') return;
-    const now = Date.now();
+    const now = getServerTime();
     globalAllBosses.forEach(boss => {
         if (!boss.targetTime) return;
         const remaining = boss.targetTime - now;
@@ -822,7 +845,7 @@ function checkGlobalNotifications() {
 }
 
 function updateTimers() {
-    const now = Date.now();
+    const now = getServerTime();
     checkGlobalNotifications();
     globalBossesData.forEach(boss => {
         const card = document.getElementById(`boss-card-${boss.id}`);
@@ -887,8 +910,8 @@ function updateTimers() {
             return;
         }
 
-        const STALE_THRESHOLD = 12 * 60 * 60 * 1000; // 12h: guards against clock-skew false deletes
-        if (now - targetEpoch > STALE_THRESHOLD) {
+        const TWO_HOURS = 2 * 60 * 60 * 1000;
+        if (now - targetEpoch > TWO_HOURS) {
             if (!boss._deleting && currentMapId) {
                 boss._deleting = true;
                 if (IS_LOCAL_PREVIEW) {
