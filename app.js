@@ -1150,6 +1150,7 @@ ui.saveStage.onclick = async () => {
 window.editBoss = (bossId, channelName) => {
     if (!currentUserPerms.create) return;
     editingBossId = bossId;
+    bossModalTargetMapId = currentMapId;
     ui.bossModal.querySelector('h3').textContent = `Reset Respawn: Ch. ${channelName}`;
     ui.newBossName.value = channelName;
     ui.newBossName.disabled = true;
@@ -1166,8 +1167,11 @@ const resetBossModal = () => {
     ui.newBossTime.value = '';
 };
 
+let bossModalTargetMapId = null;
+
 ui.addBossBtn.onclick = () => {
     editingBossId = null;
+    bossModalTargetMapId = currentMapId;
     ui.bossModal.querySelector('h3').textContent = "Add New Channel";
     ui.newBossName.disabled = false;
     ui.newBossName.parentElement.style.display = 'flex';
@@ -1256,6 +1260,7 @@ ui.saveBoss.onclick = async () => {
         alert("You do not have permission to create channels.");
         return;
     }
+    const targetMapId = bossModalTargetMapId || currentMapId;
     const name = normalizeChannelNumber(ui.newBossName.value.trim());
 
     if (!name) {
@@ -1266,7 +1271,7 @@ ui.saveBoss.onclick = async () => {
 
     const timeStr = ui.newBossTime.value.trim();
 
-    if (name && timeStr.includes(':') && currentMapId) {
+    if (name && timeStr.includes(':') && targetMapId) {
         const parts = timeStr.split(':');
         const h = parseInt(parts[0]) || 0;
         const m = parseInt(parts[1]) || 0;
@@ -1307,16 +1312,6 @@ ui.saveBoss.onclick = async () => {
 
         if (!editingBossId) {
             existingChannel = globalBossesData.find(boss => normalizeChannelNumber(boss.name) === name) || null;
-
-            // Also check the deterministic document in case another user created it
-            // after this client's latest snapshot.
-            if (!existingChannel && !IS_LOCAL_PREVIEW) {
-                const channelSnapshot = await getDoc(doc(db, `maps/${currentMapId}/bosses`, channelDocumentId));
-                if (channelSnapshot.exists()) {
-                    existingChannel = { id: channelSnapshot.id, ...channelSnapshot.data() };
-                }
-            }
-
             if (existingChannel) {
                 const shouldReplace = confirm(
                     `Channel ${name} already exists on this map. Replace its current timer with this new time?`
@@ -1329,7 +1324,7 @@ ui.saveBoss.onclick = async () => {
 
         if (IS_LOCAL_PREVIEW) {
             if (targetBossId) {
-                const boss = getPreviewBosses(currentMapId).find(item => item.id === targetBossId);
+                const boss = getPreviewBosses(targetMapId).find(item => item.id === targetBossId);
                 if (boss) {
                     boss.name = name;
                     boss.targetTime = targetEpoch;
@@ -1341,7 +1336,7 @@ ui.saveBoss.onclick = async () => {
                     delete boss.defeatedAt;
                 }
             } else {
-                getPreviewBosses(currentMapId).push({
+                getPreviewBosses(targetMapId).push({
                     id: channelDocumentId,
                     name,
                     targetTime: targetEpoch,
@@ -1352,12 +1347,24 @@ ui.saveBoss.onclick = async () => {
             refreshPreviewMap();
             ui.bossModal.classList.remove('show');
             editingBossId = null;
+            bossModalTargetMapId = null;
             ui.newBossName.value = '';
             ui.newBossTime.value = '';
         } else {
             try {
-                if (targetBossId) {
-                    await updateDoc(doc(db, `maps/${currentMapId}/bosses`, targetBossId), {
+                if (!editingBossId && !existingChannel && !IS_LOCAL_PREVIEW) {
+                    const channelSnapshot = await getDoc(doc(db, `maps/${targetMapId}/bosses`, channelDocumentId));
+                    if (channelSnapshot.exists()) {
+                        existingChannel = { id: channelSnapshot.id, ...channelSnapshot.data() };
+                        const shouldReplace = confirm(
+                            `Channel ${name} already exists on this map. Replace its current timer with this new time?`
+                        );
+                        if (!shouldReplace) return;
+                    }
+                }
+                const resolvedTargetBossId = editingBossId || existingChannel?.id || null;
+                if (resolvedTargetBossId) {
+                    await updateDoc(doc(db, `maps/${targetMapId}/bosses`, resolvedTargetBossId), {
                         name,
                         targetTime: targetEpoch,
                         hhmmStr: saveHhMmStr,
@@ -1369,7 +1376,7 @@ ui.saveBoss.onclick = async () => {
                     const action = existingChannel ? 'Replace Existing Channel' : 'Reset Timer';
                     logActivity(action, `Map [${ui.currentMapTitle.textContent}] Channel [${name}] | New Time: ${saveHhMmStr}`);
                 } else {
-                    await setDoc(doc(db, `maps/${currentMapId}/bosses`, channelDocumentId), {
+                    await setDoc(doc(db, `maps/${targetMapId}/bosses`, channelDocumentId), {
                         name,
                         targetTime: targetEpoch,
                         hhmmStr: saveHhMmStr,
@@ -1379,6 +1386,7 @@ ui.saveBoss.onclick = async () => {
                 }
                 ui.bossModal.classList.remove('show');
                 editingBossId = null;
+                bossModalTargetMapId = null;
                 ui.newBossName.value = '';
                 ui.newBossTime.value = '';
             } catch (err) {
