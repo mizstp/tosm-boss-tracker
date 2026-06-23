@@ -166,6 +166,7 @@ let bossLoadGeneration = 0;
 const urlParams = new URLSearchParams(window.location.search);
 const IS_LOCAL_PREVIEW = ['localhost', '127.0.0.1'].includes(window.location.hostname)
     && urlParams.get('preview') === '1';
+const FORCE_REAUTH_STORAGE_KEY = 'tosm-force-reauth';
 const previewBossesByMap = new Map();
 
 // Permissions state
@@ -269,6 +270,7 @@ if (IS_LOCAL_PREVIEW) {
                     lastSeenAt: serverTimestamp(),
                     sessionAuthTime: sessionAuthTimeSeconds
                 }, { merge: true });
+                localStorage.removeItem(FORCE_REAUTH_STORAGE_KEY);
                 startSessionWatcher(currentMemberRef, currentSessionAuthTimeMs);
                 startPresenceHeartbeat(currentMemberRef);
 
@@ -324,10 +326,16 @@ if (IS_LOCAL_PREVIEW) {
 }
 
 // Google Login
-const provider = new GoogleAuthProvider();
 forms.googleLoginBtn.addEventListener('click', async () => {
     try {
-        forms.errorMsg.textContent = "Opening Google login...";
+        const requiresFreshAuthentication = localStorage.getItem(FORCE_REAUTH_STORAGE_KEY) === '1';
+        const provider = new GoogleAuthProvider();
+        if (requiresFreshAuthentication) {
+            provider.setCustomParameters({ prompt: 'select_account' });
+        }
+        forms.errorMsg.textContent = requiresFreshAuthentication
+            ? 'Choose your Google account to start a new session...'
+            : 'Opening Google login...';
         forms.googleLoginBtn.disabled = true;
         await signInWithPopup(auth, provider);
         forms.errorMsg.textContent = "";
@@ -409,6 +417,7 @@ async function forceReauthentication(message) {
     if (isForcingReauth) return;
     isForcingReauth = true;
     pendingAuthMessage = message;
+    localStorage.setItem(FORCE_REAUTH_STORAGE_KEY, '1');
     cleanupAuthenticatedSession();
     try {
         await signOut(auth);
