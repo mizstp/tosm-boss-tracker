@@ -11,6 +11,34 @@ service cloud.firestore {
         request.auth.token.email in ['mizstpz@gmail.com', 'flosslnw4@gmail.com'];
     }
 
+    function authTime() {
+      return timestamp.value(request.auth.token.auth_time * 1000);
+    }
+
+    function hasActiveMemberSession() {
+      let memberPath = /databases/$(database)/documents/members/$(request.auth.token.email);
+      return !exists(memberPath) ||
+        !('forceReauthAfter' in get(memberPath).data) ||
+        get(memberPath).data.forceReauthAfter == null ||
+        authTime() > get(memberPath).data.forceReauthAfter;
+    }
+
+    function hasActiveGlobalSession() {
+      let settingsPath = /databases/$(database)/documents/settings/global;
+      return !exists(settingsPath) ||
+        !('forceLogoutSince' in get(settingsPath).data) ||
+        get(settingsPath).data.forceLogoutSince == null ||
+        authTime() > get(settingsPath).data.forceLogoutSince;
+    }
+
+    function isSessionActive() {
+      return isAuthenticated() && hasActiveMemberSession() && hasActiveGlobalSession();
+    }
+
+    function isActiveAdmin() {
+      return isAdmin() && isSessionActive();
+    }
+
     // Read the caller's role document and check a named permission field
     function hasPermission(perm) {
       let memberData = get(/databases/$(database)/documents/members/$(request.auth.token.email)).data;
@@ -23,48 +51,67 @@ service cloud.firestore {
     // Authenticated users need to read settings (for force-logout watcher).
     // Only admins can write.
     match /settings/{docId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow get: if isAuthenticated() && docId == 'global';
+      allow list: if isSessionActive();
+      allow write: if isActiveAdmin();
     }
 
     // ---- Audit logs ----
     // Admins can read/delete; any authenticated user can append
     match /auditLogs/{logId} {
-      allow get, list: if isAdmin();
-      allow delete:    if isAdmin();
-      allow create:    if isAuthenticated();
+      allow get, list: if isActiveAdmin();
+      allow delete:    if isActiveAdmin();
+      allow create:    if isSessionActive();
     }
 
     // ---- Roles ----
     // Any authenticated user needs to read roles to resolve their own permissions
     // Only admins can create, update, or delete roles
     match /roles/{roleId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow read: if isSessionActive();
+      allow write: if isActiveAdmin();
     }
 
     // ---- Members ----
     // Users can read and update their own record (for lastLogin tracking)
     // but cannot change their own roleId — only admins can assign roles
     match /members/{email} {
-      allow read: if isAdmin() || (isAuthenticated() && request.auth.token.email == email);
+      // A user may always read only their own control record so a revoked
+      // session can receive the real-time sign-out signal. App data remains
+      // protected by isSessionActive().
+      allow get: if isActiveAdmin() ||
+                 (isAuthenticated() && request.auth.token.email == email);
+      allow list: if isActiveAdmin();
       allow create: if isAuthenticated() && request.auth.token.email == email
-                    && !('roleId' in request.resource.data);
-      allow update: if isAdmin() ||
-                    (isAuthenticated() && request.auth.token.email == email
-                     && (!('roleId' in request.resource.data)
-                         || request.resource.data.roleId == resource.data.get('roleId', null)));
-      allow delete: if isAdmin();
+                    && request.resource.data.keys().hasOnly([
+                      'email', 'lastLogin', 'lastSeenAt', 'sessionAuthTime'
+                    ])
+                    && request.resource.data.sessionAuthTime == request.auth.token.auth_time
+                    && request.resource.data.lastLogin == request.time
+                    && request.resource.data.lastSeenAt == request.time;
+      allow update: if isActiveAdmin() ||
+                    (isSessionActive()
+                     && request.auth.token.email == email
+                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                       'email', 'lastLogin', 'lastSeenAt', 'sessionAuthTime'
+                     ])
+                     && request.resource.data.email == request.auth.token.email
+                     && request.resource.data.get('sessionAuthTime', request.auth.token.auth_time) == request.auth.token.auth_time
+                     && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastLogin'])
+                         || request.resource.data.lastLogin == request.time)
+                     && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastSeenAt'])
+                         || request.resource.data.lastSeenAt == request.time));
+      allow delete: if isActiveAdmin();
     }
 
     // ---- Boss channels ----
     // view permission → read; create permission → add/update; delete permissions → remove
     match /maps/{mapId}/bosses/{bossId} {
-      allow read:   if isAdmin() || (isAuthenticated() && hasPermission('view'));
-      allow create: if isAdmin() || (isAuthenticated() && hasPermission('create'));
-      allow update: if isAdmin() || (isAuthenticated() && hasPermission('create'));
-      allow delete: if isAdmin() ||
-                    (isAuthenticated() && (hasPermission('delChannel') || hasPermission('delAll')));
+      allow read:   if isSessionActive() && (isAdmin() || hasPermission('view'));
+      allow create: if isSessionActive() && (isAdmin() || hasPermission('create'));
+      allow update: if isSessionActive() && (isAdmin() || hasPermission('create'));
+      allow delete: if isSessionActive() &&
+                    (isAdmin() || hasPermission('delChannel') || hasPermission('delAll'));
     }
   }
 }

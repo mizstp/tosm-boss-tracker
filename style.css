@@ -1740,6 +1740,108 @@ a:focus-visible {
     letter-spacing: -0.02em;
 }
 
+.admin-members-table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 0.85rem;
+}
+
+.admin-members-table tbody tr {
+    border-bottom: 1px solid var(--card-border);
+}
+
+.admin-members-table td {
+    padding: 0.75rem 0.8rem;
+    vertical-align: middle;
+}
+
+.admin-member-email {
+    max-width: 220px;
+    color: var(--text-main);
+    overflow-wrap: anywhere;
+}
+
+.admin-role-badge {
+    color: var(--warning);
+    font-weight: 700;
+}
+
+.admin-role-select {
+    width: 100%;
+    min-width: 145px;
+    max-width: 180px;
+    min-height: 44px;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--text-main);
+}
+
+.member-session-status {
+    display: inline-flex;
+    min-width: 118px;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.member-status-line {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--text-main);
+    font-weight: 700;
+}
+
+.member-status-dot {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.member-session-status.is-online .member-status-dot {
+    background: var(--success);
+}
+
+.member-session-status.is-online .member-status-line {
+    color: #73d6a4;
+}
+
+.member-session-status.is-reauth .member-status-dot {
+    background: var(--danger);
+}
+
+.member-session-status.is-reauth .member-status-line {
+    color: #f19595;
+}
+
+.member-status-detail {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+
+.member-kick-btn {
+    min-width: 104px;
+    min-height: 44px;
+    white-space: nowrap;
+}
+
+.member-kick-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.admin-empty-cell {
+    padding: 1rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
 .modal-heading {
     margin-bottom: 1.5rem;
     padding-bottom: 1rem;
@@ -1957,6 +2059,59 @@ a:focus-visible {
 
     .modal-actions .btn {
         flex: 1;
+    }
+
+    #admin-modal .admin-members-table {
+        display: block;
+        min-width: 0;
+    }
+
+    .admin-members-table thead {
+        display: none;
+    }
+
+    .admin-members-table tbody {
+        display: grid;
+        gap: 0.75rem;
+        padding: 0.1rem;
+    }
+
+    .admin-members-table tbody tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 0.75rem;
+        padding: 0.85rem;
+        border: 1px solid var(--card-border);
+        border-radius: 10px;
+        background: var(--surface-1);
+    }
+
+    .admin-members-table td {
+        display: block;
+        min-width: 0;
+        padding: 0;
+    }
+
+    .admin-members-table td::before {
+        display: block;
+        margin-bottom: 0.35rem;
+        color: var(--text-muted);
+        content: attr(data-label);
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .admin-member-email {
+        grid-column: 1 / -1;
+        max-width: none;
+    }
+
+    .admin-role-select,
+    .member-kick-btn {
+        width: 100%;
+        max-width: none;
     }
 }
 

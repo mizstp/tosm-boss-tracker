@@ -249,7 +249,7 @@
 
         <!-- Admin Dashboard Modal -->
         <div id="admin-modal" class="modal" style="align-items: flex-start; padding-top: 2rem;">
-            <div class="modal-content card-glass" style="max-width: 800px; width: 95%;">
+            <div class="modal-content card-glass" style="max-width: 980px; width: 95%;">
                 <h3 style="color: var(--danger);">Admin Control Panel</h3>
                 
                 <div class="tabs-container" style="padding: 0; margin-bottom: 1rem;">
@@ -285,15 +285,17 @@
                 <!-- Members Tab -->
                 <div id="admin-members-content" style="display: none;">
                     <div class="admin-table-wrap" style="max-height: 350px; overflow-y: auto; background: rgba(0,0,0,0.3); border-radius: 8px;">
-                        <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 0.85rem;">
+                        <table class="admin-members-table">
                             <thead style="position: sticky; top: 0; background: #0f172a;">
                                 <tr style="border-bottom: 1px solid var(--card-border);">
                                     <th style="padding: 0.8rem; color: var(--primary);">Email</th>
                                     <th style="padding: 0.8rem; color: var(--primary);">Role</th>
+                                    <th style="padding: 0.8rem; color: var(--primary);">Status</th>
+                                    <th style="padding: 0.8rem; color: var(--primary);">Session</th>
                                 </tr>
                             </thead>
                             <tbody id="admin-members-tbody">
-                                <tr><td colspan="2" style="padding: 0.8rem;">Loading members...</td></tr>
+                                <tr><td colspan="4" style="padding: 0.8rem;">Loading members...</td></tr>
                             </tbody>
                         </table>
                     </div>

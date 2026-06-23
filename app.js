@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, getDocs, setDoc, orderBy, limit, deleteField } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, getDocs, setDoc, orderBy, limit, deleteField, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 // Your Firebase configuration from the screenshot
 const firebaseConfig = {
@@ -170,6 +170,10 @@ const previewBossesByMap = new Map();
 
 // Permissions state
 let currentUserPerms = { view: false, admin: false, create: false, delete_channel: false, delete_all: false };
+let currentSessionAuthTimeMs = 0;
+let currentMemberRef = null;
+let pendingAuthMessage = '';
+let isForcingReauth = false;
 
 // ----------------- AUDIT LOGS -----------------
 async function logActivity(action, details) {
@@ -233,72 +237,89 @@ if (IS_LOCAL_PREVIEW) {
     queueMicrotask(initializeLocalPreview);
 } else {
     onAuthStateChanged(auth, async (user) => {
-    if (user) {
-        const uEmail = user.email.toLowerCase();
+        if (user) {
+            try {
+                const uEmail = user.email.toLowerCase();
+                const tokenResult = await user.getIdTokenResult();
+                const sessionAuthTimeSeconds = Number(tokenResult.claims.auth_time)
+                    || Math.floor(new Date(tokenResult.authTime).getTime() / 1000);
+                if (!Number.isFinite(sessionAuthTimeSeconds)) {
+                    throw new Error('Firebase did not return a valid authentication time.');
+                }
+                currentSessionAuthTimeMs = sessionAuthTimeSeconds * 1000;
+                currentMemberRef = doc(db, "members", uEmail);
 
-        let currentRoleId = null;
-        const memRef = doc(db, "members", uEmail);
-        const memDoc = await getDoc(memRef);
+                const [memDoc, settingsDoc] = await Promise.all([
+                    getDoc(currentMemberRef),
+                    getDoc(doc(db, 'settings', 'global'))
+                ]);
+                const memberData = memDoc.exists() ? memDoc.data() : {};
+                const globalData = settingsDoc.exists() ? settingsDoc.data() : {};
 
-        if (memDoc.exists()) {
-            currentRoleId = memDoc.data().roleId;
-        }
+                if (isCutoffNewer(memberData.forceReauthAfter, currentSessionAuthTimeMs)
+                    || isCutoffNewer(globalData.forceLogoutSince, currentSessionAuthTimeMs)) {
+                    await forceReauthentication('Your session expired. Sign in again to continue.');
+                    return;
+                }
 
-        // Track user in 'members' (no auto role assignment)
-        await setDoc(memRef, { email: user.email, lastLogin: serverTimestamp() }, { merge: true });
+                // Track the authenticated session and begin presence heartbeats.
+                await setDoc(currentMemberRef, {
+                    email: user.email,
+                    lastLogin: serverTimestamp(),
+                    lastSeenAt: serverTimestamp(),
+                    sessionAuthTime: sessionAuthTimeSeconds
+                }, { merge: true });
+                startSessionWatcher(currentMemberRef, currentSessionAuthTimeMs);
+                startPresenceHeartbeat(currentMemberRef);
 
-        // Resolve Permissions
-        let perms = { view: false, admin: false, create: false, delete_channel: false, delete_all: false };
-        if (AdminEmails.includes(uEmail)) {
-            perms = { view: true, admin: true, create: true, delete_channel: true, delete_all: true };
-        } else {
-            if (currentRoleId) {
-                const roleDoc = await getDoc(doc(db, "roles", currentRoleId));
-                if (roleDoc.exists()) {
-                    const rp = roleDoc.data();
-                    if (rp.view) perms.view = true;
-                    if (rp.admin) perms.admin = true;
-                    if (rp.create) perms.create = true;
-                    if (rp.delChannel) perms.delete_channel = true;
-                    if (rp.delAll) perms.delete_all = true;
+                let perms = { view: false, admin: false, create: false, delete_channel: false, delete_all: false };
+                if (AdminEmails.includes(uEmail)) {
+                    perms = { view: true, admin: true, create: true, delete_channel: true, delete_all: true };
+                } else if (memberData.roleId) {
+                    const roleDoc = await getDoc(doc(db, "roles", memberData.roleId));
+                    if (roleDoc.exists()) {
+                        const rp = roleDoc.data();
+                        if (rp.view) perms.view = true;
+                        if (rp.admin) perms.admin = true;
+                        if (rp.create) perms.create = true;
+                        if (rp.delChannel) perms.delete_channel = true;
+                        if (rp.delAll) perms.delete_all = true;
+                    }
+                }
+                currentUserPerms = perms;
+
+                ui.adminBtn.style.display = currentUserPerms.admin ? 'block' : 'none';
+                ui.noAccessPanel.style.display = currentUserPerms.view ? 'none' : 'block';
+                ui.mainContent.style.display = currentUserPerms.view ? 'flex' : 'none';
+                document.getElementById('app').classList.add('full-width');
+
+                switchView('dashboard');
+                forms.userEmail.textContent = user.email;
+                if (currentUserPerms.view) {
+                    await syncServerTime();
+                    loadGroups();
+                    startGlobalListeners(currentGroup);
+                    loadMaps();
+                }
+            } catch (error) {
+                console.error('Failed to initialize authenticated session:', error);
+                if (error.code === 'permission-denied') {
+                    await forceReauthentication('Your session no longer has access. Sign in again.');
+                } else {
+                    pendingAuthMessage = `Unable to start session: ${error.message}`;
+                    await signOut(auth);
                 }
             }
+        } else {
+            switchView('auth');
+            document.getElementById('app').classList.remove('full-width');
+            forms.errorMsg.textContent = pendingAuthMessage;
+            pendingAuthMessage = '';
+            cleanupAuthenticatedSession();
+            currentSessionAuthTimeMs = 0;
+            currentMemberRef = null;
+            isForcingReauth = false;
         }
-        currentUserPerms = perms;
-
-        // Start force-logout watcher before loading the app
-        const signInEpoch = new Date(user.metadata.lastSignInTime).getTime();
-        startSessionWatcher(signInEpoch);
-
-        // Apply visual access
-        ui.adminBtn.style.display = currentUserPerms.admin ? 'block' : 'none';
-        ui.noAccessPanel.style.display = currentUserPerms.view ? 'none' : 'block';
-        ui.mainContent.style.display = currentUserPerms.view ? 'flex' : 'none';
-        document.getElementById('app').classList.add('full-width');
-
-        switchView('dashboard');
-        forms.userEmail.textContent = user.email;
-        if (currentUserPerms.view) {
-            await syncServerTime();
-            loadGroups();
-            startGlobalListeners(currentGroup);
-            loadMaps();
-        }
-    } else {
-        switchView('auth');
-        document.getElementById('app').classList.remove('full-width');
-        // Cleanup listeners when logged out
-        if (mapsUnsubscribe) mapsUnsubscribe();
-        if (bossesUnsubscribe) bossesUnsubscribe();
-        if (updateInterval) clearInterval(updateInterval);
-        if (sessionWatcherUnsub) { sessionWatcherUnsub(); sessionWatcherUnsub = null; }
-
-        // Cleanup all background listeners
-        Object.values(globalMapListeners).forEach(unsub => unsub());
-        globalMapListeners = {};
-        globalAllBosses = [];
-        notifiedBosses = {};
-    }
     });
 }
 
@@ -352,22 +373,109 @@ if (ui.notiBtn) {
 }
 let notifiedBosses = {};
 
-// ----------------- SESSION WATCHER -----------------
-// Listens to settings/global in real-time. If an admin sets forceLogoutSince
-// to a time after this user logged in, sign them out and reload immediately —
-// even if they never refresh the page.
+// ----------------- SESSION / PRESENCE -----------------
 let sessionWatcherUnsub = null;
+let memberSessionWatcherUnsub = null;
+let presenceHeartbeatInterval = null;
+const PRESENCE_HEARTBEAT_MS = 30 * 1000;
+const PRESENCE_ONLINE_WINDOW_MS = 90 * 1000;
 
-function startSessionWatcher(userSignInEpoch) {
-    if (sessionWatcherUnsub) sessionWatcherUnsub();
-    sessionWatcherUnsub = onSnapshot(doc(db, 'settings', 'global'), (snap) => {
-        if (!snap.exists()) return;
-        const ts = snap.data().forceLogoutSince;
-        if (ts && ts.toMillis() > userSignInEpoch) {
-            signOut(auth).then(() => location.reload());
-        }
-    });
+function timestampToMillis(value) {
+    return value && typeof value.toMillis === 'function' ? value.toMillis() : 0;
 }
+
+function isCutoffNewer(cutoff, sessionAuthTimeMs) {
+    const cutoffMs = timestampToMillis(cutoff);
+    return cutoffMs > 0 && cutoffMs >= sessionAuthTimeMs;
+}
+
+function cleanupAuthenticatedSession() {
+    stopPresenceHeartbeat();
+    if (mapsUnsubscribe) { mapsUnsubscribe(); mapsUnsubscribe = null; }
+    if (bossesUnsubscribe) { bossesUnsubscribe(); bossesUnsubscribe = null; }
+    if (updateInterval) { clearInterval(updateInterval); updateInterval = null; }
+    if (sessionWatcherUnsub) { sessionWatcherUnsub(); sessionWatcherUnsub = null; }
+    if (memberSessionWatcherUnsub) { memberSessionWatcherUnsub(); memberSessionWatcherUnsub = null; }
+    if (adminLogsUnsubscribe) { adminLogsUnsubscribe(); adminLogsUnsubscribe = null; }
+    if (adminMembersUnsubscribe) { adminMembersUnsubscribe(); adminMembersUnsubscribe = null; }
+    if (adminRolesUnsubscribe) { adminRolesUnsubscribe(); adminRolesUnsubscribe = null; }
+    Object.values(globalMapListeners).forEach(unsub => unsub());
+    globalMapListeners = {};
+    globalAllBosses = [];
+    notifiedBosses = {};
+}
+
+async function forceReauthentication(message) {
+    if (isForcingReauth) return;
+    isForcingReauth = true;
+    pendingAuthMessage = message;
+    cleanupAuthenticatedSession();
+    try {
+        await signOut(auth);
+    } catch (error) {
+        console.error('Failed to sign out revoked session:', error);
+        location.reload();
+    }
+}
+
+function startSessionWatcher(memberRef, sessionAuthTimeMs) {
+    if (sessionWatcherUnsub) sessionWatcherUnsub();
+    if (memberSessionWatcherUnsub) memberSessionWatcherUnsub();
+
+    const handleSnapshot = (snap, fieldName) => {
+        if (snap.exists() && isCutoffNewer(snap.data()[fieldName], sessionAuthTimeMs)) {
+            forceReauthentication('Your session was ended by an administrator. Sign in again to continue.');
+        }
+    };
+
+    sessionWatcherUnsub = onSnapshot(
+        doc(db, 'settings', 'global'),
+        snap => handleSnapshot(snap, 'forceLogoutSince'),
+        error => {
+            console.error('Global session watcher failed:', error);
+            if (error.code === 'permission-denied') forceReauthentication('Your session expired. Sign in again.');
+        }
+    );
+    memberSessionWatcherUnsub = onSnapshot(
+        memberRef,
+        snap => handleSnapshot(snap, 'forceReauthAfter'),
+        error => {
+            console.error('Member session watcher failed:', error);
+            if (error.code === 'permission-denied') forceReauthentication('Your session expired. Sign in again.');
+        }
+    );
+}
+
+async function writePresenceHeartbeat() {
+    if (!auth.currentUser || !currentMemberRef || isForcingReauth) return;
+    try {
+        await updateDoc(currentMemberRef, { lastSeenAt: serverTimestamp() });
+    } catch (error) {
+        console.error('Presence heartbeat failed:', error);
+        if (error.code === 'permission-denied') {
+            forceReauthentication('Your session expired. Sign in again.');
+        }
+    }
+}
+
+function startPresenceHeartbeat(memberRef) {
+    stopPresenceHeartbeat();
+    currentMemberRef = memberRef;
+    presenceHeartbeatInterval = setInterval(writePresenceHeartbeat, PRESENCE_HEARTBEAT_MS);
+}
+
+function stopPresenceHeartbeat() {
+    if (presenceHeartbeatInterval) {
+        clearInterval(presenceHeartbeatInterval);
+        presenceHeartbeatInterval = null;
+    }
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') writePresenceHeartbeat();
+});
+window.addEventListener('focus', writePresenceHeartbeat);
+window.addEventListener('online', writePresenceHeartbeat);
 
 // ----------------- SERVER TIME SYNC -----------------
 // Keeps a one-time offset so all timer comparisons use server time, not the
@@ -1257,6 +1365,7 @@ document.addEventListener('keydown', (e) => {
         if (adminLogsUnsubscribe) adminLogsUnsubscribe();
         if (adminMembersUnsubscribe) adminMembersUnsubscribe();
         if (adminRolesUnsubscribe) adminRolesUnsubscribe();
+        stopAdminMembersStatusUpdates();
     } else if (ui.stageModal.classList.contains('show')) {
         ui.stageModal.classList.remove('show');
         stagingBossId = null;
@@ -1448,6 +1557,9 @@ ui.saveBoss.onclick = async () => {
 let adminLogsUnsubscribe = null;
 let adminMembersUnsubscribe = null;
 let adminRolesUnsubscribe = null;
+let adminMembersStatusInterval = null;
+let adminMembersData = [];
+const kickConfirmationExpiries = new Map();
 
 let globalRolesList = [];
 
@@ -1477,6 +1589,7 @@ if (ui.adminBtn) {
         if (adminLogsUnsubscribe) adminLogsUnsubscribe();
         if (adminMembersUnsubscribe) adminMembersUnsubscribe();
         if (adminRolesUnsubscribe) adminRolesUnsubscribe();
+        stopAdminMembersStatusUpdates();
     };
 
     ui.tabLogs.onclick = () => switchAdminTab('logs');
@@ -1666,53 +1779,193 @@ function loadAdminMembers() {
     const q = query(collection(db, "members"));
     if (adminMembersUnsubscribe) adminMembersUnsubscribe();
     adminMembersUnsubscribe = onSnapshot(q, (snapshot) => {
-        ui.adminMembersTbody.innerHTML = '';
-        if (snapshot.empty) {
-            ui.adminMembersTbody.innerHTML = "<tr><td colspan='2' style='padding: 0.8rem;'>No members found.</td></tr>";
-            return;
-        }
-        snapshot.forEach(docSnap => {
-            const d = docSnap.data();
-            const email = docSnap.id;
-
-            const tr = document.createElement('tr');
-            tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
-
-            const tdEmail = document.createElement('td');
-            tdEmail.style.cssText = 'padding: 0.8rem; color:var(--text-main); word-break: break-all;';
-            tdEmail.textContent = email;
-
-            const tdRole = document.createElement('td');
-            tdRole.style.padding = '0.8rem';
-
-            if (AdminEmails.includes(email)) {
-                const badge = document.createElement('span');
-                badge.style.cssText = 'color:#f59e0b; font-weight:bold;';
-                badge.textContent = 'Super Admin (Locked)';
-                tdRole.appendChild(badge);
-            } else {
-                const select = document.createElement('select');
-                select.style.cssText = 'background:rgba(15,23,42,0.8); color:white; padding:0.4rem; border-radius:4px; border:1px solid var(--card-border); max-width: 150px;';
-                const defaultOpt = document.createElement('option');
-                defaultOpt.value = '';
-                defaultOpt.textContent = '-- No Permissions --';
-                select.appendChild(defaultOpt);
-                globalRolesList.forEach(r => {
-                    const opt = document.createElement('option');
-                    opt.value = r.id;
-                    opt.textContent = r.name;
-                    opt.selected = d.roleId === r.id;
-                    select.appendChild(opt);
-                });
-                select.addEventListener('change', () => window.updateMemberRole(email, select.value));
-                tdRole.appendChild(select);
-            }
-
-            tr.appendChild(tdEmail);
-            tr.appendChild(tdRole);
-            ui.adminMembersTbody.appendChild(tr);
-        });
+        adminMembersData = snapshot.docs.map(docSnap => ({
+            email: docSnap.id,
+            ...docSnap.data()
+        }));
+        renderAdminMembers();
     });
+    startAdminMembersStatusUpdates();
+}
+
+function getMemberSessionState(member) {
+    const forceReauthMs = timestampToMillis(member.forceReauthAfter);
+    const sessionAuthTimeMs = Number(member.sessionAuthTime || 0) * 1000;
+    const lastSeenMs = timestampToMillis(member.lastSeenAt);
+    const requiresReauth = forceReauthMs > 0 && sessionAuthTimeMs <= forceReauthMs;
+    const isOnline = !requiresReauth && lastSeenMs > 0
+        && getServerTime() - lastSeenMs <= PRESENCE_ONLINE_WINDOW_MS;
+
+    if (requiresReauth) {
+        return { className: 'reauth', label: 'Re-auth required', detail: 'Session ended' };
+    }
+    if (isOnline) {
+        return { className: 'online', label: 'Online', detail: 'Active now' };
+    }
+    return {
+        className: 'offline',
+        label: 'Offline',
+        detail: lastSeenMs ? `Last seen ${formatRelativeTime(lastSeenMs)}` : 'No presence yet'
+    };
+}
+
+function formatRelativeTime(timestampMs) {
+    const elapsedSeconds = Math.max(0, Math.floor((getServerTime() - timestampMs) / 1000));
+    if (elapsedSeconds < 60) return 'just now';
+    const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+    if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
+    const elapsedHours = Math.floor(elapsedMinutes / 60);
+    if (elapsedHours < 24) return `${elapsedHours}h ago`;
+    return new Date(timestampMs).toLocaleDateString();
+}
+
+function createMemberStatus(member) {
+    const state = getMemberSessionState(member);
+    const wrapper = document.createElement('span');
+    wrapper.className = `member-session-status is-${state.className}`;
+    wrapper.dataset.memberStatus = member.email;
+
+    const line = document.createElement('span');
+    line.className = 'member-status-line';
+    const dot = document.createElement('span');
+    dot.className = 'member-status-dot';
+    dot.setAttribute('aria-hidden', 'true');
+    const label = document.createElement('span');
+    label.textContent = state.label;
+    line.append(dot, label);
+
+    const detail = document.createElement('span');
+    detail.className = 'member-status-detail';
+    detail.textContent = state.detail;
+    wrapper.append(line, detail);
+    return wrapper;
+}
+
+function createMemberKickButton(email) {
+    const button = document.createElement('button');
+    button.className = 'btn danger-btn sm-btn member-kick-btn';
+    const currentEmail = auth.currentUser?.email?.toLowerCase();
+    if (currentEmail === email.toLowerCase()) {
+        button.textContent = 'Current session';
+        button.disabled = true;
+        button.title = 'You cannot end your own session here.';
+        return button;
+    }
+
+    const confirmationExpiry = kickConfirmationExpiries.get(email) || 0;
+    button.textContent = confirmationExpiry > Date.now() ? 'Confirm kick' : 'Kick';
+    button.setAttribute('aria-label', `Kick all sessions for ${email}`);
+    button.addEventListener('click', () => handleKickMember(email, button));
+    return button;
+}
+
+function renderAdminMembers() {
+    ui.adminMembersTbody.innerHTML = '';
+    if (!adminMembersData.length) {
+        ui.adminMembersTbody.innerHTML = "<tr><td colspan='4' class='admin-empty-cell'>No members found.</td></tr>";
+        return;
+    }
+
+    adminMembersData.forEach(member => {
+        const email = member.email;
+        const tr = document.createElement('tr');
+
+        const tdEmail = document.createElement('td');
+        tdEmail.className = 'admin-member-email';
+        tdEmail.dataset.label = 'Email';
+        tdEmail.textContent = email;
+
+        const tdRole = document.createElement('td');
+        tdRole.dataset.label = 'Role';
+        if (AdminEmails.includes(email.toLowerCase())) {
+            const badge = document.createElement('span');
+            badge.className = 'admin-role-badge';
+            badge.textContent = 'Super Admin';
+            tdRole.appendChild(badge);
+        } else {
+            const select = document.createElement('select');
+            select.className = 'admin-role-select';
+            select.setAttribute('aria-label', `Role for ${email}`);
+            const defaultOpt = document.createElement('option');
+            defaultOpt.value = '';
+            defaultOpt.textContent = '-- No Permissions --';
+            select.appendChild(defaultOpt);
+            globalRolesList.forEach(role => {
+                const opt = document.createElement('option');
+                opt.value = role.id;
+                opt.textContent = role.name;
+                opt.selected = member.roleId === role.id;
+                select.appendChild(opt);
+            });
+            select.addEventListener('change', () => window.updateMemberRole(email, select.value));
+            tdRole.appendChild(select);
+        }
+
+        const tdStatus = document.createElement('td');
+        tdStatus.dataset.label = 'Status';
+        tdStatus.appendChild(createMemberStatus(member));
+        const tdSession = document.createElement('td');
+        tdSession.dataset.label = 'Session';
+        tdSession.appendChild(createMemberKickButton(email));
+
+        tr.append(tdEmail, tdRole, tdStatus, tdSession);
+        ui.adminMembersTbody.appendChild(tr);
+    });
+}
+
+function refreshAdminMemberStatuses() {
+    adminMembersData.forEach(member => {
+        const existing = ui.adminMembersTbody.querySelector(`[data-member-status="${CSS.escape(member.email)}"]`);
+        if (existing) existing.replaceWith(createMemberStatus(member));
+    });
+}
+
+function startAdminMembersStatusUpdates() {
+    stopAdminMembersStatusUpdates();
+    adminMembersStatusInterval = setInterval(refreshAdminMemberStatuses, 15 * 1000);
+}
+
+function stopAdminMembersStatusUpdates() {
+    if (adminMembersStatusInterval) {
+        clearInterval(adminMembersStatusInterval);
+        adminMembersStatusInterval = null;
+    }
+}
+
+async function handleKickMember(email, button) {
+    const confirmationExpiry = kickConfirmationExpiries.get(email) || 0;
+    if (confirmationExpiry <= Date.now()) {
+        const expiresAt = Date.now() + 5000;
+        kickConfirmationExpiries.set(email, expiresAt);
+        button.textContent = 'Confirm kick';
+        setTimeout(() => {
+            if (kickConfirmationExpiries.get(email) !== expiresAt) return;
+            kickConfirmationExpiries.delete(email);
+            if (button.isConnected) button.textContent = 'Kick';
+        }, 5000);
+        return;
+    }
+
+    kickConfirmationExpiries.delete(email);
+    button.disabled = true;
+    button.textContent = 'Kicking...';
+    try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'members', email), { forceReauthAfter: serverTimestamp() });
+        batch.set(doc(collection(db, 'auditLogs')), {
+            action: 'Force re-authentication',
+            details: `Ended all active app sessions for ${email}`,
+            userEmail: auth.currentUser.email,
+            timestamp: serverTimestamp()
+        });
+        await batch.commit();
+        button.textContent = 'Kicked';
+    } catch (error) {
+        console.error('Failed to kick member:', error);
+        button.disabled = false;
+        button.textContent = 'Retry kick';
+        button.title = error.message;
+    }
 }
 
 window.deleteRole = async (roleId, triggerEl) => {
