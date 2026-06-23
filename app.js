@@ -1033,10 +1033,10 @@ window.deleteBoss = async (bossId, bossName) => {
 };
 
 // ----------------- INSERT CHANNEL (SHIFT) -----------------
-async function shiftChannels(insertAtNum) {
-    if (!currentMapId || !currentUserPerms.create) return;
+async function shiftChannels(insertAtNum, targetMapId = currentMapId, bossesSnapshot = globalBossesData) {
+    if (!targetMapId || !currentUserPerms.create) return;
 
-    const toShift = globalBossesData
+    const toShift = bossesSnapshot
         .filter(b => Number(b.name) >= insertAtNum)
         .sort((a, b) => Number(b.name) - Number(a.name)); // descending to avoid collisions
 
@@ -1062,19 +1062,28 @@ async function shiftChannels(insertAtNum) {
         if (boss.stage != null) newData.stage = boss.stage;
         if (boss.awaitingReset != null) newData.awaitingReset = boss.awaitingReset;
         if (boss.defeatedAt != null) newData.defeatedAt = boss.defeatedAt;
-        await setDoc(doc(db, `maps/${currentMapId}/bosses`, newDocId), newData);
-        await deleteDoc(doc(db, `maps/${currentMapId}/bosses`, boss.id));
+        await setDoc(doc(db, `maps/${targetMapId}/bosses`, newDocId), newData);
+        await deleteDoc(doc(db, `maps/${targetMapId}/bosses`, boss.id));
     }
     logActivity("Insert Channel", `Map [${ui.currentMapTitle.textContent}] inserted at Ch.${insertAtNum}, shifted ${toShift.length} channel(s) up`);
 }
 
+let insertChannelTargetMapId = null;
+let insertChannelTargetBossesSnapshot = null;
+
 ui.insertChannelBtn.onclick = () => {
+    insertChannelTargetMapId = currentMapId;
+    insertChannelTargetBossesSnapshot = globalBossesData.slice();
     ui.insertChannelInput.value = '';
     ui.insertChannelModal.classList.add('show');
     ui.insertChannelInput.focus();
 };
 
-ui.cancelInsertBtn.onclick = () => ui.insertChannelModal.classList.remove('show');
+ui.cancelInsertBtn.onclick = () => {
+    ui.insertChannelModal.classList.remove('show');
+    insertChannelTargetMapId = null;
+    insertChannelTargetBossesSnapshot = null;
+};
 
 ui.saveInsertBtn.onclick = async () => {
     const num = parseInt(ui.insertChannelInput.value, 10);
@@ -1083,11 +1092,17 @@ ui.saveInsertBtn.onclick = async () => {
         ui.insertChannelInput.focus();
         return;
     }
+    if (!insertChannelTargetMapId) {
+        alert('No map selected. Please close and try again.');
+        return;
+    }
     ui.saveInsertBtn.disabled = true;
     ui.saveInsertBtn.textContent = 'Shifting...';
     try {
-        await shiftChannels(num);
+        await shiftChannels(num, insertChannelTargetMapId, insertChannelTargetBossesSnapshot);
         ui.insertChannelModal.classList.remove('show');
+        insertChannelTargetMapId = null;
+        insertChannelTargetBossesSnapshot = null;
     } catch (err) {
         console.error('Insert channel failed:', err);
         alert(`Failed to insert channel: ${err.message}`);
