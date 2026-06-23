@@ -602,7 +602,7 @@ function selectMap(name) {
 
     // UI perms apply
     ui.addBossBtn.style.display = currentUserPerms.create ? 'inline-flex' : 'none';
-    ui.insertChannelBtn.style.display = currentUserPerms.create ? 'inline-flex' : 'none';
+    ui.insertChannelBtn.style.display = (currentUserPerms.create && (currentUserPerms.delete_channel || currentUserPerms.delete_all)) ? 'inline-flex' : 'none';
 
     // update tab UI
     Array.from(ui.mapTabs.children).forEach(t => {
@@ -1088,6 +1088,9 @@ ui.saveInsertBtn.onclick = async () => {
     try {
         await shiftChannels(num);
         ui.insertChannelModal.classList.remove('show');
+    } catch (err) {
+        console.error('Insert channel failed:', err);
+        alert(`Failed to insert channel: ${err.message}`);
     } finally {
         ui.saveInsertBtn.disabled = false;
         ui.saveInsertBtn.textContent = 'Shift Channels';
@@ -1332,31 +1335,42 @@ ui.saveBoss.onclick = async () => {
                 });
             }
             refreshPreviewMap();
-        } else if (targetBossId) {
-            await updateDoc(doc(db, `maps/${currentMapId}/bosses`, targetBossId), {
-                name,
-                targetTime: targetEpoch,
-                hhmmStr: saveHhMmStr,
-                respawnLengthMin: totalMin,
-                stage: deleteField(),
-                awaitingReset: deleteField(),
-                defeatedAt: deleteField()
-            });
-            const action = existingChannel ? 'Replace Existing Channel' : 'Reset Timer';
-            logActivity(action, `Map [${ui.currentMapTitle.textContent}] Channel [${name}] | New Time: ${saveHhMmStr}`);
+            ui.bossModal.classList.remove('show');
+            editingBossId = null;
+            ui.newBossName.value = '';
+            ui.newBossTime.value = '';
         } else {
-            await setDoc(doc(db, `maps/${currentMapId}/bosses`, channelDocumentId), {
-                name,
-                targetTime: targetEpoch,
-                hhmmStr: saveHhMmStr,
-                respawnLengthMin: totalMin
-            });
-            logActivity("Add Channel", `Map [${ui.currentMapTitle.textContent}] Channel [${name}] | Time Set: ${saveHhMmStr}`);
+            try {
+                if (targetBossId) {
+                    await updateDoc(doc(db, `maps/${currentMapId}/bosses`, targetBossId), {
+                        name,
+                        targetTime: targetEpoch,
+                        hhmmStr: saveHhMmStr,
+                        respawnLengthMin: totalMin,
+                        stage: deleteField(),
+                        awaitingReset: deleteField(),
+                        defeatedAt: deleteField()
+                    });
+                    const action = existingChannel ? 'Replace Existing Channel' : 'Reset Timer';
+                    logActivity(action, `Map [${ui.currentMapTitle.textContent}] Channel [${name}] | New Time: ${saveHhMmStr}`);
+                } else {
+                    await setDoc(doc(db, `maps/${currentMapId}/bosses`, channelDocumentId), {
+                        name,
+                        targetTime: targetEpoch,
+                        hhmmStr: saveHhMmStr,
+                        respawnLengthMin: totalMin
+                    });
+                    logActivity("Add Channel", `Map [${ui.currentMapTitle.textContent}] Channel [${name}] | Time Set: ${saveHhMmStr}`);
+                }
+                ui.bossModal.classList.remove('show');
+                editingBossId = null;
+                ui.newBossName.value = '';
+                ui.newBossTime.value = '';
+            } catch (err) {
+                console.error('Save channel failed:', err);
+                alert(`Failed to save channel: ${err.message}`);
+            }
         }
-        ui.bossModal.classList.remove('show');
-        editingBossId = null;
-        ui.newBossName.value = '';
-        ui.newBossTime.value = '';
     } else {
         alert("Please enter a valid channel number and time in HH:MM format (like '02:30').");
     }
