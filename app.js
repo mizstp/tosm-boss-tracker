@@ -414,7 +414,8 @@ function cleanupAuthenticatedSession() {
     if (adminRolesUnsubscribe) { adminRolesUnsubscribe(); adminRolesUnsubscribe = null; }
     if (adminPresenceUnsub) { adminPresenceUnsub(); adminPresenceUnsub = null; }
     if (currentPresenceRef) {
-        rtdbSet(currentPresenceRef, { online: false, lastSeen: { '.sv': 'timestamp' } }).catch(() => {});
+        const offlineEmail = auth.currentUser?.email;
+        rtdbSet(currentPresenceRef, { online: false, lastSeen: { '.sv': 'timestamp' }, ...(offlineEmail && { email: offlineEmail }) }).catch(() => {});
         currentPresenceRef = null;
     }
     adminRtdbPresence = {};
