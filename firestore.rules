@@ -15,24 +15,20 @@ service cloud.firestore {
       return timestamp.value(request.auth.token.auth_time * 1000);
     }
 
-    function hasActiveMemberSession() {
-      let memberPath = /databases/$(database)/documents/members/$(request.auth.token.email);
-      return !exists(memberPath) ||
-        !('forceReauthAfter' in get(memberPath).data) ||
-        get(memberPath).data.forceReauthAfter == null ||
-        authTime() > get(memberPath).data.forceReauthAfter;
-    }
-
     function hasActiveGlobalSession() {
       let settingsPath = /databases/$(database)/documents/settings/global;
-      return !exists(settingsPath) ||
-        !('forceLogoutSince' in get(settingsPath).data) ||
-        get(settingsPath).data.forceLogoutSince == null ||
-        authTime() > get(settingsPath).data.forceLogoutSince;
+      let email = request.auth.token.email;
+      return !exists(settingsPath)
+        || ((!('forceLogoutSince' in get(settingsPath).data)
+            || get(settingsPath).data.forceLogoutSince == null
+            || authTime() > get(settingsPath).data.forceLogoutSince)
+          && (!('kickedUsers' in get(settingsPath).data)
+            || !(email in get(settingsPath).data.kickedUsers)
+            || authTime() > get(settingsPath).data.kickedUsers[email]));
     }
 
     function isSessionActive() {
-      return isAuthenticated() && hasActiveMemberSession() && hasActiveGlobalSession();
+      return isAuthenticated() && hasActiveGlobalSession();
     }
 
     function isActiveAdmin() {
@@ -84,23 +80,20 @@ service cloud.firestore {
       allow list: if isActiveAdmin();
       allow create: if isAuthenticated() && request.auth.token.email == email
                     && request.resource.data.keys().hasOnly([
-                      'email', 'lastLogin', 'lastSeenAt', 'sessionAuthTime'
+                      'email', 'lastLogin', 'sessionAuthTime'
                     ])
                     && request.resource.data.sessionAuthTime == request.auth.token.auth_time
-                    && request.resource.data.lastLogin == request.time
-                    && request.resource.data.lastSeenAt == request.time;
+                    && request.resource.data.lastLogin == request.time;
       allow update: if isActiveAdmin() ||
                     (isSessionActive()
                      && request.auth.token.email == email
                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                       'email', 'lastLogin', 'lastSeenAt', 'sessionAuthTime'
+                       'email', 'lastLogin', 'sessionAuthTime'
                      ])
                      && request.resource.data.email == request.auth.token.email
                      && request.resource.data.get('sessionAuthTime', request.auth.token.auth_time) == request.auth.token.auth_time
                      && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastLogin'])
-                         || request.resource.data.lastLogin == request.time)
-                     && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastSeenAt'])
-                         || request.resource.data.lastSeenAt == request.time));
+                         || request.resource.data.lastLogin == request.time));
       allow delete: if isActiveAdmin();
     }
 

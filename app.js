@@ -257,22 +257,19 @@ if (IS_LOCAL_PREVIEW) {
                 const memberData = memDoc.exists() ? memDoc.data() : {};
                 const globalData = settingsDoc.exists() ? settingsDoc.data() : {};
 
-                if (isCutoffNewer(memberData.forceReauthAfter, currentSessionAuthTimeMs)
-                    || isCutoffNewer(globalData.forceLogoutSince, currentSessionAuthTimeMs)) {
+                if (isCutoffNewer(globalData.forceLogoutSince, currentSessionAuthTimeMs)
+                    || isCutoffNewer((globalData.kickedUsers || {})[uEmail], currentSessionAuthTimeMs)) {
                     await forceReauthentication('Your session expired. Sign in again to continue.');
                     return;
                 }
 
-                // Track the authenticated session and begin presence heartbeats.
                 await setDoc(currentMemberRef, {
                     email: user.email,
                     lastLogin: serverTimestamp(),
-                    lastSeenAt: serverTimestamp(),
                     sessionAuthTime: sessionAuthTimeSeconds
                 }, { merge: true });
                 localStorage.removeItem(FORCE_REAUTH_STORAGE_KEY);
-                startSessionWatcher(currentMemberRef, currentSessionAuthTimeMs);
-                startPresenceHeartbeat(currentMemberRef);
+                startSessionWatcher(currentSessionAuthTimeMs, uEmail);
 
                 let perms = { view: false, admin: false, create: false, delete_channel: false, delete_all: false };
                 if (AdminEmails.includes(uEmail)) {
@@ -383,10 +380,6 @@ let notifiedBosses = {};
 
 // ----------------- SESSION / PRESENCE -----------------
 let sessionWatcherUnsub = null;
-let memberSessionWatcherUnsub = null;
-let presenceHeartbeatInterval = null;
-const PRESENCE_HEARTBEAT_MS = 30 * 1000;
-const PRESENCE_ONLINE_WINDOW_MS = 90 * 1000;
 
 function timestampToMillis(value) {
     return value && typeof value.toMillis === 'function' ? value.toMillis() : 0;
@@ -398,12 +391,10 @@ function isCutoffNewer(cutoff, sessionAuthTimeMs) {
 }
 
 function cleanupAuthenticatedSession() {
-    stopPresenceHeartbeat();
     if (mapsUnsubscribe) { mapsUnsubscribe(); mapsUnsubscribe = null; }
     if (bossesUnsubscribe) { bossesUnsubscribe(); bossesUnsubscribe = null; }
     if (updateInterval) { clearInterval(updateInterval); updateInterval = null; }
     if (sessionWatcherUnsub) { sessionWatcherUnsub(); sessionWatcherUnsub = null; }
-    if (memberSessionWatcherUnsub) { memberSessionWatcherUnsub(); memberSessionWatcherUnsub = null; }
     if (adminLogsUnsubscribe) { adminLogsUnsubscribe(); adminLogsUnsubscribe = null; }
     if (adminMembersUnsubscribe) { adminMembersUnsubscribe(); adminMembersUnsubscribe = null; }
     if (adminRolesUnsubscribe) { adminRolesUnsubscribe(); adminRolesUnsubscribe = null; }
@@ -427,64 +418,24 @@ async function forceReauthentication(message) {
     }
 }
 
-function startSessionWatcher(memberRef, sessionAuthTimeMs) {
+function startSessionWatcher(sessionAuthTimeMs, userEmail) {
     if (sessionWatcherUnsub) sessionWatcherUnsub();
-    if (memberSessionWatcherUnsub) memberSessionWatcherUnsub();
-
-    const handleSnapshot = (snap, fieldName) => {
-        if (snap.exists() && isCutoffNewer(snap.data()[fieldName], sessionAuthTimeMs)) {
-            forceReauthentication('Your session was ended by an administrator. Sign in again to continue.');
-        }
-    };
-
     sessionWatcherUnsub = onSnapshot(
         doc(db, 'settings', 'global'),
-        snap => handleSnapshot(snap, 'forceLogoutSince'),
+        snap => {
+            if (!snap.exists()) return;
+            const data = snap.data();
+            if (isCutoffNewer(data.forceLogoutSince, sessionAuthTimeMs)
+                || isCutoffNewer((data.kickedUsers || {})[userEmail], sessionAuthTimeMs)) {
+                forceReauthentication('Your session was ended by an administrator. Sign in again to continue.');
+            }
+        },
         error => {
             console.error('Global session watcher failed:', error);
             if (error.code === 'permission-denied') forceReauthentication('Your session expired. Sign in again.');
         }
     );
-    memberSessionWatcherUnsub = onSnapshot(
-        memberRef,
-        snap => handleSnapshot(snap, 'forceReauthAfter'),
-        error => {
-            console.error('Member session watcher failed:', error);
-            if (error.code === 'permission-denied') forceReauthentication('Your session expired. Sign in again.');
-        }
-    );
 }
-
-async function writePresenceHeartbeat() {
-    if (!auth.currentUser || !currentMemberRef || isForcingReauth) return;
-    try {
-        await updateDoc(currentMemberRef, { lastSeenAt: serverTimestamp() });
-    } catch (error) {
-        console.error('Presence heartbeat failed:', error);
-        if (error.code === 'permission-denied') {
-            forceReauthentication('Your session expired. Sign in again.');
-        }
-    }
-}
-
-function startPresenceHeartbeat(memberRef) {
-    stopPresenceHeartbeat();
-    currentMemberRef = memberRef;
-    presenceHeartbeatInterval = setInterval(writePresenceHeartbeat, PRESENCE_HEARTBEAT_MS);
-}
-
-function stopPresenceHeartbeat() {
-    if (presenceHeartbeatInterval) {
-        clearInterval(presenceHeartbeatInterval);
-        presenceHeartbeatInterval = null;
-    }
-}
-
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') writePresenceHeartbeat();
-});
-window.addEventListener('focus', writePresenceHeartbeat);
-window.addEventListener('online', writePresenceHeartbeat);
 
 // ----------------- SERVER TIME SYNC -----------------
 // Keeps a one-time offset so all timer comparisons use server time, not the
@@ -1798,23 +1749,11 @@ function loadAdminMembers() {
 }
 
 function getMemberSessionState(member) {
-    const forceReauthMs = timestampToMillis(member.forceReauthAfter);
-    const sessionAuthTimeMs = Number(member.sessionAuthTime || 0) * 1000;
-    const lastSeenMs = timestampToMillis(member.lastSeenAt);
-    const requiresReauth = forceReauthMs > 0 && sessionAuthTimeMs <= forceReauthMs;
-    const isOnline = !requiresReauth && lastSeenMs > 0
-        && getServerTime() - lastSeenMs <= PRESENCE_ONLINE_WINDOW_MS;
-
-    if (requiresReauth) {
-        return { className: 'reauth', label: 'Re-auth required', detail: 'Session ended' };
-    }
-    if (isOnline) {
-        return { className: 'online', label: 'Online', detail: 'Active now' };
-    }
+    const lastLoginMs = timestampToMillis(member.lastLogin);
     return {
-        className: 'offline',
-        label: 'Offline',
-        detail: lastSeenMs ? `Last seen ${formatRelativeTime(lastSeenMs)}` : 'No presence yet'
+        className: 'member',
+        label: lastLoginMs ? 'Member' : 'No login',
+        detail: lastLoginMs ? `Last login ${formatRelativeTime(lastLoginMs)}` : 'Never logged in'
     };
 }
 
@@ -1960,7 +1899,7 @@ async function handleKickMember(email, button) {
     button.textContent = 'Kicking...';
     try {
         const batch = writeBatch(db);
-        batch.update(doc(db, 'members', email), { forceReauthAfter: serverTimestamp() });
+        batch.update(doc(db, 'settings', 'global'), { [`kickedUsers.${email}`]: serverTimestamp() });
         batch.set(doc(collection(db, 'auditLogs')), {
             action: 'Force re-authentication',
             details: `Ended all active app sessions for ${email}`,
