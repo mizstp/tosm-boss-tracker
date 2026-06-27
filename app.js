@@ -162,11 +162,10 @@ if (ui.typeAbsolute && ui.typeDuration) {
 // ----------------- APP STATE -----------------
 let currentMapId = null;
 let mapsUnsubscribe = null;
-let bossesUnsubscribe = null;
 let updateInterval = null;
 let globalBossesData = [];
 const deletingBossIds = new Set();
-let bossLoadGeneration = 0;
+const globalMapLoaded = new Set();
 const urlParams = new URLSearchParams(window.location.search);
 const IS_LOCAL_PREVIEW = ['localhost', '127.0.0.1'].includes(window.location.hostname)
     && urlParams.get('preview') === '1';
@@ -406,7 +405,6 @@ function isCutoffNewer(cutoff, sessionAuthTimeMs) {
 
 function cleanupAuthenticatedSession() {
     if (mapsUnsubscribe) { mapsUnsubscribe(); mapsUnsubscribe = null; }
-    if (bossesUnsubscribe) { bossesUnsubscribe(); bossesUnsubscribe = null; }
     if (updateInterval) { clearInterval(updateInterval); updateInterval = null; }
     if (sessionWatcherUnsub) { sessionWatcherUnsub(); sessionWatcherUnsub = null; }
     if (adminLogsUnsubscribe) { adminLogsUnsubscribe(); adminLogsUnsubscribe = null; }
@@ -422,6 +420,7 @@ function cleanupAuthenticatedSession() {
     Object.values(globalMapListeners).forEach(unsub => unsub());
     globalMapListeners = {};
     globalAllBosses = [];
+    globalMapLoaded.clear();
     notifiedBosses = {};
 }
 
@@ -509,6 +508,7 @@ function startGlobalListeners(group) {
     Object.values(globalMapListeners).forEach(unsub => unsub());
     globalMapListeners = {};
     globalAllBosses = [];
+    globalMapLoaded.clear();
 
     const epKeys = EP_GROUPS[group] || [];
     if (IS_LOCAL_PREVIEW) {
@@ -531,8 +531,20 @@ function startGlobalListeners(group) {
                 snapshot.forEach(docSnap => {
                     globalAllBosses.push({ id: docSnap.id, mapId: mapId, ...docSnap.data() });
                 });
+                globalMapLoaded.add(mapId);
                 updateTabIcons();
                 updateStagePanel();
+                // Single source of truth for boss cards — no separate bossesUnsubscribe needed
+                if (mapId === currentMapId) {
+                    globalBossesData = globalAllBosses.filter(b => b.mapId === mapId);
+                    renderBossCards();
+                }
+            }, (error) => {
+                console.error(`Global listener failed for map ${mapId}:`, error);
+                if (mapId === currentMapId) {
+                    globalBossesData = [];
+                    ui.bossList.innerHTML = '<div class="empty-state error-state">Could not load channels. Try selecting the map again.</div>';
+                }
             });
         });
     });
@@ -758,21 +770,14 @@ function selectMap(name) {
 
 // ----------------- BOSS LOGIC -----------------
 function loadBosses(mapId) {
-    const loadGeneration = ++bossLoadGeneration;
-
-    if (bossesUnsubscribe) {
-        bossesUnsubscribe();
-        bossesUnsubscribe = null;
-    }
     if (updateInterval) {
         clearInterval(updateInterval);
         updateInterval = null;
     }
 
-    // Never leave the previous map's channels visible while the next snapshot loads.
+    // Clear previous map data immediately to avoid stale cards.
     globalBossesData = [];
     deletingBossIds.clear();
-    ui.bossList.innerHTML = '<div class="empty-state loading-state">Loading channels...</div>';
 
     if (IS_LOCAL_PREVIEW) {
         globalBossesData = getPreviewBosses(mapId);
@@ -781,25 +786,17 @@ function loadBosses(mapId) {
         return;
     }
 
-    const q = query(collection(db, `maps/${mapId}/bosses`));
-    bossesUnsubscribe = onSnapshot(q, (snapshot) => {
-        // Ignore a late response from a map the user has already left.
-        if (currentMapId !== mapId || loadGeneration !== bossLoadGeneration) return;
-
-        globalBossesData = [];
-        snapshot.forEach(doc => {
-            globalBossesData.push({ id: doc.id, ...doc.data() });
-        });
+    if (globalMapLoaded.has(mapId)) {
+        // globalMapListeners already has fresh data — derive directly, no extra read.
+        globalBossesData = globalAllBosses.filter(b => b.mapId === mapId);
         renderBossCards();
-        // start UI timer update loop
-        if (updateInterval) clearInterval(updateInterval);
-        updateInterval = setInterval(updateTimers, 1000);
-    }, (error) => {
-        if (currentMapId !== mapId || loadGeneration !== bossLoadGeneration) return;
-        console.error(`Failed to load channels for ${mapId}:`, error);
-        globalBossesData = [];
-        ui.bossList.innerHTML = '<div class="empty-state error-state">Could not load channels. Try selecting the map again.</div>';
-    });
+    } else {
+        // globalMapListeners snapshot hasn't arrived yet; show loading state.
+        // startGlobalListeners will call renderBossCards when it fires for this map.
+        ui.bossList.innerHTML = '<div class="empty-state loading-state">Loading channels...</div>';
+    }
+
+    updateInterval = setInterval(updateTimers, 1000);
 }
 
 function createBossAction(label, title, className, onClick) {
