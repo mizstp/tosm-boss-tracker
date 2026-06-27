@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, getDocs, setDoc, orderBy, limit, deleteField, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getDatabase, ref as rtdbRef, set as rtdbSet, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
 
 // Your Firebase configuration from the screenshot
 const firebaseConfig = {
@@ -10,13 +11,15 @@ const firebaseConfig = {
     storageBucket: "tosm-3f264.firebasestorage.app",
     messagingSenderId: "602705659676",
     appId: "1:602705659676:web:54705408856ea7e25edcd9",
-    measurementId: "G-PYVW8G02YE"
+    measurementId: "G-PYVW8G02YE",
+    databaseURL: "https://tosm-3f264-default-rtdb.asia-southeast1.firebasedatabase.app"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const rtdb = getDatabase(app);
 
 const AdminEmails = ["mizstpz@gmail.com", "flosslnw4@gmail.com"];
 
@@ -271,6 +274,7 @@ if (IS_LOCAL_PREVIEW) {
                 }, { merge: true });
                 localStorage.removeItem(FORCE_REAUTH_STORAGE_KEY);
                 startSessionWatcher(currentSessionAuthTimeMs, uEmail);
+                startPresence(user.uid, uEmail);
 
                 let perms = { view: false, admin: false, create: false, delete_channel: false, delete_all: false };
                 if (AdminEmails.includes(uEmail)) {
@@ -381,6 +385,15 @@ let notifiedBosses = {};
 
 // ----------------- SESSION / PRESENCE -----------------
 let sessionWatcherUnsub = null;
+let currentPresenceRef = null;
+let adminPresenceUnsub = null;
+let adminRtdbPresence = {};
+
+async function startPresence(uid, email) {
+    currentPresenceRef = rtdbRef(rtdb, `presence/${uid}`);
+    onDisconnect(currentPresenceRef).set({ online: false, lastSeen: { '.sv': 'timestamp' }, email });
+    await rtdbSet(currentPresenceRef, { online: true, lastSeen: { '.sv': 'timestamp' }, email });
+}
 
 function timestampToMillis(value) {
     return value && typeof value.toMillis === 'function' ? value.toMillis() : 0;
@@ -399,6 +412,12 @@ function cleanupAuthenticatedSession() {
     if (adminLogsUnsubscribe) { adminLogsUnsubscribe(); adminLogsUnsubscribe = null; }
     if (adminMembersUnsubscribe) { adminMembersUnsubscribe(); adminMembersUnsubscribe = null; }
     if (adminRolesUnsubscribe) { adminRolesUnsubscribe(); adminRolesUnsubscribe = null; }
+    if (adminPresenceUnsub) { adminPresenceUnsub(); adminPresenceUnsub = null; }
+    if (currentPresenceRef) {
+        rtdbSet(currentPresenceRef, { online: false, lastSeen: { '.sv': 'timestamp' } }).catch(() => {});
+        currentPresenceRef = null;
+    }
+    adminRtdbPresence = {};
     Object.values(globalMapListeners).forEach(unsub => unsub());
     globalMapListeners = {};
     globalAllBosses = [];
@@ -1751,15 +1770,30 @@ function loadAdminMembers() {
         }));
         renderAdminMembers();
     });
+
+    if (adminPresenceUnsub) adminPresenceUnsub();
+    adminPresenceUnsub = onValue(rtdbRef(rtdb, 'presence'), snap => {
+        adminRtdbPresence = {};
+        const data = snap.val() || {};
+        Object.values(data).forEach(entry => {
+            if (entry.email) adminRtdbPresence[entry.email] = entry;
+        });
+        renderAdminMembers();
+    });
+
     startAdminMembersStatusUpdates();
 }
 
 function getMemberSessionState(member) {
-    const lastLoginMs = timestampToMillis(member.lastLogin);
+    const presence = adminRtdbPresence[member.email];
+    if (presence?.online) {
+        return { className: 'online', label: 'Online', detail: 'Active now' };
+    }
+    const lastSeenMs = presence?.lastSeen || timestampToMillis(member.lastLogin);
     return {
-        className: 'member',
-        label: lastLoginMs ? 'Member' : 'No login',
-        detail: lastLoginMs ? `Last login ${formatRelativeTime(lastLoginMs)}` : 'Never logged in'
+        className: 'offline',
+        label: 'Offline',
+        detail: lastSeenMs ? `Last seen ${formatRelativeTime(lastSeenMs)}` : 'Never logged in'
     };
 }
 
