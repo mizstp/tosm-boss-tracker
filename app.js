@@ -1033,7 +1033,12 @@ function updateTimers() {
                     );
                     refreshPreviewMap();
                 } else {
+                    const mapLabel = ui.currentMapTitle?.textContent || currentMapId;
                     deleteDoc(doc(db, `maps/${currentMapId}/bosses`, boss.id))
+                        .then(() => logActivity(
+                            'Auto-Delete Channel',
+                            `Map [${mapLabel}] Channel [${boss.name}] removed — spawn time expired >2h ago`
+                        ))
                         .catch(err => {
                             console.error(err);
                             deletingBossIds.delete(boss.id);
