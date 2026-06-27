@@ -162,6 +162,7 @@ let mapsUnsubscribe = null;
 let bossesUnsubscribe = null;
 let updateInterval = null;
 let globalBossesData = [];
+const deletingBossIds = new Set();
 let bossLoadGeneration = 0;
 const urlParams = new URLSearchParams(window.location.search);
 const IS_LOCAL_PREVIEW = ['localhost', '127.0.0.1'].includes(window.location.hostname)
@@ -750,6 +751,7 @@ function loadBosses(mapId) {
 
     // Never leave the previous map's channels visible while the next snapshot loads.
     globalBossesData = [];
+    deletingBossIds.clear();
     ui.bossList.innerHTML = '<div class="empty-state loading-state">Loading channels...</div>';
 
     if (IS_LOCAL_PREVIEW) {
@@ -1002,8 +1004,8 @@ function updateTimers() {
 
         const TWO_HOURS = 2 * 60 * 60 * 1000;
         if (now - targetEpoch > TWO_HOURS) {
-            if (!boss._deleting && currentMapId) {
-                boss._deleting = true;
+            if (!deletingBossIds.has(boss.id) && currentMapId) {
+                deletingBossIds.add(boss.id);
                 if (IS_LOCAL_PREVIEW) {
                     previewBossesByMap.set(
                         currentMapId,
@@ -1011,7 +1013,11 @@ function updateTimers() {
                     );
                     refreshPreviewMap();
                 } else {
-                    deleteDoc(doc(db, `maps/${currentMapId}/bosses`, boss.id)).catch(console.error);
+                    deleteDoc(doc(db, `maps/${currentMapId}/bosses`, boss.id))
+                        .catch(err => {
+                            console.error(err);
+                            deletingBossIds.delete(boss.id);
+                        });
                 }
             }
             return;
