@@ -458,21 +458,19 @@ function startSessionWatcher(sessionAuthTimeMs, userEmail) {
 }
 
 // ----------------- SERVER TIME SYNC -----------------
-// Keeps a one-time offset so all timer comparisons use server time, not the
-// local clock. This prevents wrong clocks (e.g. jet-lag timezone drift) from
-// triggering false auto-deletes or mis-firing notifications.
+// Reads the Firebase RTDB .info/serverTimeOffset (ms delta: server − client).
+// This is the only cross-origin-safe way to get a real server-clock offset;
+// the previous fetch-based approach was always CORS-blocked and silently
+// returned offset=0, leaving getServerTime() === Date.now() for all users.
 let serverTimeOffset = 0;
 
-async function syncServerTime() {
-    try {
-        const resp = await fetch('https://firestore.googleapis.com/');
-        const dateHeader = resp.headers.get('date');
-        if (dateHeader) {
-            serverTimeOffset = new Date(dateHeader).getTime() - Date.now();
-        }
-    } catch (_) {
-        // silently fall back to local time
-    }
+function syncServerTime() {
+    return new Promise(resolve => {
+        onValue(rtdbRef(rtdb, '.info/serverTimeOffset'), snapshot => {
+            serverTimeOffset = snapshot.val() ?? 0;
+            resolve();
+        }, { onlyOnce: true });
+    });
 }
 
 function getServerTime() {
